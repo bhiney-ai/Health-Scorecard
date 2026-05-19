@@ -245,29 +245,14 @@ table.dt tr:last-child td{border-bottom:none}
 <div class="modal-bg hidden" id="settings-modal">
   <div class="modal">
     <div class="mh">
-      <h2>Configure Data Sources</h2>
+      <h2>Settings</h2>
       <button class="btn btn-ghost" id="close-settings" style="padding:4px 8px">✕</button>
     </div>
     <div class="mb">
-      <div class="alert ai">
-        <strong>Google Sheets CSV URL:</strong> Open the sheet tab → address bar URL → change <code>/edit#gid=XXXX</code> to <code>/export?format=csv&amp;gid=XXXX</code>.<br>
-        <strong>CORS:</strong> Serve this file via <code>python3 -m http.server 8080</code>, then open <code>http://localhost:8080</code>.
-      </div>
-      <div class="msec">Required Sources</div>
-      <div class="fg"><label class="fl">On Hand <span>— inventory quantities and costs</span></label><input class="fi" id="cfg-oh" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="fg"><label class="fl">ABC <span>— revenue classification (include sub-category classification)</span></label><input class="fi" id="cfg-abc" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="fg"><label class="fl">XYZ <span>— demand variability classification</span></label><input class="fi" id="cfg-xyz" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="fg"><label class="fl">Active Customers — SKU Level <span>— # ordering customers per item per warehouse</span></label><input class="fi" id="cfg-cust-sku" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="fg"><label class="fl">Active Customers — Market Level <span>— total customer count per warehouse (denominator for Customer %)</span></label><input class="fi" id="cfg-cust-mkt" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="fg"><label class="fl">Customer Margin <span>— net revenue, cost amount, margin %</span></label><input class="fi" id="cfg-margin" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="fg"><label class="fl">Stock Ledger <span>— beginning &amp; ending on-hand value → avg inv → ITO / DIO / GMROI</span></label><input class="fi" id="cfg-ledger" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="fg"><label class="fl">Proc Model <span>— determines Active / Inactive status per item per warehouse</span></label><input class="fi" id="cfg-proc" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
-      <div class="msec">Display</div>
-      <div class="fg"><label class="fl">Analysis Period Label</label><input class="fi" id="cfg-label" type="text" placeholder="e.g. March 2026"><div class="fhint">Shown in KPI cards</div></div>
-      <div id="cfg-err" class="alert ae" style="display:none"></div>
+      <div class="fg"><label class="fl">Analysis Period Label</label><input class="fi" id="cfg-label" type="text" placeholder="e.g. April 2026"><div class="fhint">Shown in KPI cards and export filename</div></div>
     </div>
     <div class="mf">
-      <button class="btn btn-outline" id="btn-save-load">Save &amp; Load Data</button>
+      <button class="btn btn-outline" id="btn-save-load">Save</button>
     </div>
   </div>
 </div>
@@ -283,72 +268,19 @@ const S = {
 
 // ─── CONFIG ──────────────────────────────────────────────────
 const CFG_KEY = 'inv_dash_v2';
-const DEFAULTS = {
-  oh:      'https://docs.google.com/spreadsheets/d/1D4WMx0zvSlVH2ROdqJb8di0bQYoxPJvizMkSL8HLufQ/export?format=csv&gid=222471179',
-  abc:     'https://docs.google.com/spreadsheets/d/1_FIMGtcHlIG36ybWGsWtWUG9-ATxkUFzwBlZy1Of3i8/export?format=csv&gid=1341808860',
-  xyz:     'https://docs.google.com/spreadsheets/d/1BSbgPqVX8YI_X0E45fA8_-4pL_0YNMctbUPxmsCcon4/export?format=csv&gid=144111924',
-  custSku: 'https://docs.google.com/spreadsheets/d/1DlVvTpy1z1Gdv6VATAQtbeP0aUQK-EH0z1GRLfpks80/export?format=csv&gid=514486211',
-  custMkt: 'https://docs.google.com/spreadsheets/d/1M4MGluu2hvG_0HDB4KO-QoGwkQy9_FOKyPV00CVO6dY/export?format=csv&gid=1862358378',
-  margin:  'https://docs.google.com/spreadsheets/d/12QS8Kva_512I_oDS-gNle7dCpgCJzntiOIcpOttWaOo/export?format=csv&gid=0',
-  ledger:  'https://docs.google.com/spreadsheets/d/13Yp1zREpOFCAkEIajli5lgWdwZAZLsi7e25yod6X_tc/export?format=csv&gid=1033018785',
-  proc:    'https://docs.google.com/spreadsheets/d/1sPEc5rBdRB9qaJijBh4z8DK4ZVo--5xmTGbPTZ5n2nQ/export?format=csv&gid=1794766977',
-};
-function loadCfg() { try { return {...DEFAULTS,...JSON.parse(localStorage.getItem(CFG_KEY)||'{}')}; } catch { return {...DEFAULTS}; } }
+function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY)||'{}'); } catch { return {}; } }
 function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
 
-// ─── CSV ─────────────────────────────────────────────────────
-function parseCSV(txt) {
-  const rows=[]; let row=[],f='',q=false;
-  for (let i=0;i<txt.length;i++) {
-    const c=txt[i];
-    if (c==='"') { if(q&&txt[i+1]==='"'){f+='"';i++;} else q=!q; }
-    else if (c===','&&!q) { row.push(f);f=''; }
-    else if ((c==='\n'||c==='\r')&&!q) {
-      if(c==='\r'&&txt[i+1]==='\n')i++;
-      row.push(f); if(row.some(x=>x.trim())) rows.push(row);
-      row=[];f='';
-    } else f+=c;
-  }
-  if(f||row.length){row.push(f);if(row.some(x=>x.trim()))rows.push(row);}
-  return rows;
-}
-function toObjects(txt) {
-  const rows=parseCSV(txt); if(rows.length<2) return [];
-  // Find the densest row in the first 10 rows — handles sheets with multi-row title blocks
-  let hi=0,best=0;
-  for(let i=0;i<Math.min(10,rows.length);i++){
-    const filled=rows[i].filter(c=>c.trim()).length;
-    if(filled>best){best=filled;hi=i;}
-  }
-  const hdrs=rows[hi].map(h=>h.trim());
-  return rows.slice(hi+1).map(r=>{const o={};hdrs.forEach((h,i)=>o[h]=(r[i]||'').trim());return o;}).filter(o=>Object.values(o).some(v=>v));
-}
-
-// ─── FETCH ───────────────────────────────────────────────────
-const PROXY='https://corsproxy.io/?';
-async function fetchCSV(url) {
-  if (!url) return [];
-  url = url.replace('/edit#gid=','/export?format=csv&gid=').replace(/[?&]usp=[^&]*/,'').replace(/\/edit.*#gid=/,'/export?format=csv&gid=').replace(/\/edit$/,'/export?format=csv');
-  if (!url.includes('export?format=csv')) {
-    const m=url.match(/\/d\/([^/]+).*[?&]gid=(\d+)/);
-    if(m) url=`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${m[2]}`;
-  }
-  async function attempt(u){
-    const r=await fetch(u,{cache:'no-cache'});
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const txt=await r.text();
-    if(txt.trim().startsWith('<!')) throw new Error('Got HTML — sheet may not be public');
-    return toObjects(txt);
-  }
-  try { return await attempt(url); } catch(_) {}
-  return attempt(PROXY+encodeURIComponent(url));
-}
-async function fetchAll(cfg) {
+// ─── FETCH (local JSON files written by GitHub Action) ────────
+async function fetchAll() {
   const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'];
-  const urls=[cfg.oh,cfg.abc,cfg.xyz,cfg.custSku,cfg.custMkt,cfg.margin,cfg.ledger,cfg.proc];
-  const results=await Promise.allSettled(urls.map(u=>fetchCSV(u)));
-  const out={};
-  keys.forEach((k,i)=>{ out[k]=results[i].status==='fulfilled'?results[i].value:[]; });
+  const results=await Promise.allSettled(keys.map(k=>fetch(`data/${k}.json`,{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error(`${k}: HTTP ${r.status}`);return r.json();})));
+  const out={};const errs=[];
+  keys.forEach((k,i)=>{
+    if(results[i].status==='fulfilled'){out[k]=results[i].value;}
+    else{out[k]=[];errs.push(results[i].reason?.message||k);}
+  });
+  if(errs.length) console.warn('Some sources failed:',errs);
   return out;
 }
 
@@ -624,60 +556,25 @@ document.getElementById('btn-settings').addEventListener('click',openSettings);
 document.getElementById('close-settings').addEventListener('click',closeSettings);
 document.getElementById('settings-modal').addEventListener('click',e=>{if(e.target.id==='settings-modal')closeSettings();});
 function openSettings(){
-  const c=S.cfg;
-  ['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'].forEach(k=>{const el=document.getElementById(`cfg-${k==='custSku'?'cust-sku':k==='custMkt'?'cust-mkt':k}`);if(el)el.value=c[k]||'';});
-  document.getElementById('cfg-label').value=c.label||'';
-  document.getElementById('cfg-err').style.display='none';
+  document.getElementById('cfg-label').value=S.cfg.label||'';
   document.getElementById('settings-modal').classList.remove('hidden');
 }
 function closeSettings(){document.getElementById('settings-modal').classList.add('hidden');}
 document.getElementById('btn-save-load').addEventListener('click',async()=>{
-  const cfg={
-    oh:document.getElementById('cfg-oh').value.trim(),
-    abc:document.getElementById('cfg-abc').value.trim(),
-    xyz:document.getElementById('cfg-xyz').value.trim(),
-    custSku:document.getElementById('cfg-cust-sku').value.trim(),
-    custMkt:document.getElementById('cfg-cust-mkt').value.trim(),
-    margin:document.getElementById('cfg-margin').value.trim(),
-    ledger:document.getElementById('cfg-ledger').value.trim(),
-    proc:document.getElementById('cfg-proc').value.trim(),
-    label:document.getElementById('cfg-label').value.trim(),
-  };
-  if(!cfg.oh){showErr('On Hand URL is required.');return;}
-  saveCfg(cfg);S.cfg=cfg;
+  S.cfg={label:document.getElementById('cfg-label').value.trim()};
+  saveCfg(S.cfg);
   closeSettings();
   await refresh();
 });
-function showErr(msg){const e=document.getElementById('cfg-err');e.textContent=msg;e.style.display='block';}
 
 // ─── REFRESH ─────────────────────────────────────────────────
 document.getElementById('btn-refresh').addEventListener('click',refresh);
 async function refresh(){
-  if(!S.cfg.oh){openSettings();return;}
   document.getElementById('dash-loading').style.display='block';
   document.getElementById('dash-empty').style.display='none';
   document.getElementById('dash-content').style.display='none';
   try {
-    const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'];
-    const labels={oh:'On Hand',abc:'ABC',xyz:'XYZ',custSku:'Cust SKU',custMkt:'Cust Market',margin:'Margin',ledger:'Stock Ledger',proc:'Proc Model'};
-    const urls=[S.cfg.oh,S.cfg.abc,S.cfg.xyz,S.cfg.custSku,S.cfg.custMkt,S.cfg.margin,S.cfg.ledger,S.cfg.proc];
-    const results=await Promise.allSettled(urls.map(u=>fetchCSV(u)));
-    S.raw={};
-    const errs=[];
-    keys.forEach((k,i)=>{
-      if(results[i].status==='fulfilled'){
-        S.raw[k]=results[i].value;
-        if(!S.raw[k].length) errs.push(`${labels[k]}: 0 rows (check sharing)`);
-      } else {
-        S.raw[k]=[];
-        errs.push(`${labels[k]}: ${results[i].reason?.message||'failed'}`);
-      }
-    });
-    if(errs.length){
-      const el=document.getElementById('dash-empty');
-      el.style.display='block';
-      el.innerHTML=`<h3>Some sources failed to load</h3><p style="text-align:left;max-width:480px;margin:12px auto 0;line-height:2">${errs.map(e=>`⚠ ${e}`).join('<br>')}</p><p style="margin-top:12px;font-size:12px">Make sure each sheet is shared: <em>Share → Anyone with the link → Viewer</em></p>`;
-    }
+    S.raw=await fetchAll();
     S.warehouses=detectWH(S.raw);
     S.totalCust=parseTotalCust(S.raw.custMkt);
     localStorage.setItem('inv_dash_warehouses',JSON.stringify(S.warehouses));
@@ -685,6 +582,10 @@ async function refresh(){
     if(!S.wh&&S.warehouses.length) setWH(S.warehouses[0]);
     else if(S.wh) setWH(S.wh);
     document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
+    if(!S.warehouses.length){
+      document.getElementById('dash-empty').style.display='block';
+      document.getElementById('dash-empty').innerHTML='<h3>No data yet</h3><p>The GitHub Action hasn\'t run yet. Go to the <strong>Actions</strong> tab in GitHub and run <em>Fetch Inventory Data</em> manually.</p>';
+    }
   } catch(e) {
     console.error(e);
     document.getElementById('dash-empty').style.display='block';
@@ -1065,11 +966,9 @@ document.getElementById('btn-export').addEventListener('click',()=>{
 (function init(){
   S.cfg=loadCfg();
   const urlWH=new URLSearchParams(location.search).get('wh');
-  if(S.cfg.oh){
-    refresh().then(()=>{
-      if(urlWH&&S.warehouses.includes(urlWH)) setWH(urlWH);
-    });
-  } else setTimeout(openSettings,300);
+  refresh().then(()=>{
+    if(urlWH&&S.warehouses.includes(urlWH)) setWH(urlWH);
+  });
 })();
 </script>
 </body>
