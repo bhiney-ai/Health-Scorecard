@@ -651,7 +651,26 @@ async function refresh(){
   document.getElementById('dash-empty').style.display='none';
   document.getElementById('dash-content').style.display='none';
   try {
-    S.raw=await fetchAll(S.cfg);
+    const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'];
+    const labels={oh:'On Hand',abc:'ABC',xyz:'XYZ',custSku:'Cust SKU',custMkt:'Cust Market',margin:'Margin',ledger:'Stock Ledger',proc:'Proc Model'};
+    const urls=[S.cfg.oh,S.cfg.abc,S.cfg.xyz,S.cfg.custSku,S.cfg.custMkt,S.cfg.margin,S.cfg.ledger,S.cfg.proc];
+    const results=await Promise.allSettled(urls.map(u=>fetchCSV(u)));
+    S.raw={};
+    const errs=[];
+    keys.forEach((k,i)=>{
+      if(results[i].status==='fulfilled'){
+        S.raw[k]=results[i].value;
+        if(!S.raw[k].length) errs.push(`${labels[k]}: 0 rows (check sharing)`);
+      } else {
+        S.raw[k]=[];
+        errs.push(`${labels[k]}: ${results[i].reason?.message||'failed'}`);
+      }
+    });
+    if(errs.length){
+      const el=document.getElementById('dash-empty');
+      el.style.display='block';
+      el.innerHTML=`<h3>Some sources failed to load</h3><p style="text-align:left;max-width:480px;margin:12px auto 0;line-height:2">${errs.map(e=>`⚠ ${e}`).join('<br>')}</p><p style="margin-top:12px;font-size:12px">Make sure each sheet is shared: <em>Share → Anyone with the link → Viewer</em></p>`;
+    }
     S.warehouses=detectWH(S.raw);
     S.totalCust=parseTotalCust(S.raw.custMkt);
     localStorage.setItem('inv_dash_warehouses',JSON.stringify(S.warehouses));
@@ -661,9 +680,8 @@ async function refresh(){
     document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
   } catch(e) {
     console.error(e);
-    document.getElementById('dash-loading').style.display='none';
     document.getElementById('dash-empty').style.display='block';
-    alert('Error loading data: '+e.message+'\n\nMake sure you are serving this file via HTTP (not file://) and the sheets are publicly shared.');
+    document.getElementById('dash-empty').innerHTML=`<h3>Load failed</h3><p>${e.message}</p>`;
   }
   document.getElementById('dash-loading').style.display='none';
 }
