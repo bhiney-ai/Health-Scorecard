@@ -283,7 +283,17 @@ const S = {
 
 // ─── CONFIG ──────────────────────────────────────────────────
 const CFG_KEY = 'inv_dash_v2';
-function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY)||'{}'); } catch { return {}; } }
+const DEFAULTS = {
+  oh:      'https://docs.google.com/spreadsheets/d/1D4WMx0zvSlVH2ROdqJb8di0bQYoxPJvizMkSL8HLufQ/export?format=csv&gid=222471179',
+  abc:     'https://docs.google.com/spreadsheets/d/1_FIMGtcHlIG36ybWGsWtWUG9-ATxkUFzwBlZy1Of3i8/export?format=csv&gid=1341808860',
+  xyz:     'https://docs.google.com/spreadsheets/d/1BSbgPqVX8YI_X0E45fA8_-4pL_0YNMctbUPxmsCcon4/export?format=csv&gid=144111924',
+  custSku: 'https://docs.google.com/spreadsheets/d/1DlVvTpy1z1Gdv6VATAQtbeP0aUQK-EH0z1GRLfpks80/export?format=csv&gid=514486211',
+  custMkt: 'https://docs.google.com/spreadsheets/d/1M4MGluu2hvG_0HDB4KO-QoGwkQy9_FOKyPV00CVO6dY/export?format=csv&gid=1862358378',
+  margin:  'https://docs.google.com/spreadsheets/d/12QS8Kva_512I_oDS-gNle7dCpgCJzntiOIcpOttWaOo/export?format=csv&gid=0',
+  ledger:  'https://docs.google.com/spreadsheets/d/13Yp1zREpOFCAkEIajli5lgWdwZAZLsi7e25yod6X_tc/export?format=csv&gid=1033018785',
+  proc:    'https://docs.google.com/spreadsheets/d/1sPEc5rBdRB9qaJijBh4z8DK4ZVo--5xmTGbPTZ5n2nQ/export?format=csv&gid=1794766977',
+};
+function loadCfg() { try { return {...DEFAULTS,...JSON.parse(localStorage.getItem(CFG_KEY)||'{}')}; } catch { return {...DEFAULTS}; } }
 function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
 
 // ─── CSV ─────────────────────────────────────────────────────
@@ -304,8 +314,12 @@ function parseCSV(txt) {
 }
 function toObjects(txt) {
   const rows=parseCSV(txt); if(rows.length<2) return [];
-  let hi=0;
-  for(let i=0;i<Math.min(5,rows.length);i++){if(rows[i].some(c=>c.trim())){hi=i;break;}}
+  // Find the densest row in the first 10 rows — handles sheets with multi-row title blocks
+  let hi=0,best=0;
+  for(let i=0;i<Math.min(10,rows.length);i++){
+    const filled=rows[i].filter(c=>c.trim()).length;
+    if(filled>best){best=filled;hi=i;}
+  }
   const hdrs=rows[hi].map(h=>h.trim());
   return rows.slice(hi+1).map(r=>{const o={};hdrs.forEach((h,i)=>o[h]=(r[i]||'').trim());return o;}).filter(o=>Object.values(o).some(v=>v));
 }
@@ -336,7 +350,7 @@ function g(row,...keys){for(const k of keys){if(row&&row[k]!==undefined&&row[k]!
 function n(row,...keys){return parseFloat(g(row,...keys))||0;}
 
 // ─── WAREHOUSE DETECTION ─────────────────────────────────────
-const WH_COLS=['Warehouse Name','warehouse_name','Warehouse','warehouse','Warehouse (Picked) Warehouse Name'];
+const WH_COLS=['Warehouse Name','warehouse_name','Warehouse','warehouse','Warehouse (Picked) Warehouse Name','Location','location'];
 function getWH(row){for(const c of WH_COLS){if(row[c]&&row[c].trim())return row[c].trim();}return '';}
 function detectWH(raw){
   const whs=new Set();
@@ -456,11 +470,11 @@ function joinData(raw, wh) {
   if(!ohRows.length) return [];
 
   // Lookups — ledger and proc not warehouse-filtered (may not have WH column)
-  const abcById  = buildLookupWH(raw.abc,  wh, 'Item ID','item_id');
-  const xyzById  = buildLookup(raw.xyz, 'Netsuite Items Item ID','Item ID','item_id');
+  const abcById  = buildLookupWH(raw.abc,  wh, 'Netsuite Items Item ID','Item ID','item_id');
+  const xyzById  = buildLookupWH(raw.xyz,  wh, 'Netsuite Items Item ID','Item ID','item_id');
   const custById = buildLookupWH(raw.custSku, wh, 'Item ID','item_id');
   const mgnById  = buildLookupWH(raw.margin,  wh, 'Item ID','item_id');
-  const ledById  = buildLookup(raw.ledger, 'Internal ID','Item ID','item_id');
+  const ledById  = buildLookupWH(raw.ledger, wh, 'Internal ID','Item ID','item_id');
   const procIds  = new Set(
     raw.proc.filter(r=>g(r,'warehouse_name','Warehouse Name','warehouse').toUpperCase()===wh.toUpperCase())
             .map(r=>String(g(r,'item_id','Item ID')||'').trim())
