@@ -640,6 +640,7 @@ async function refresh(){
     S.raw=await fetchAll(S.cfg);
     S.warehouses=detectWH(S.raw);
     S.totalCust=parseTotalCust(S.raw.custMkt);
+    localStorage.setItem('inv_dash_warehouses',JSON.stringify(S.warehouses));
     populateWHPicker();
     if(!S.wh&&S.warehouses.length) setWH(S.warehouses[0]);
     else if(S.wh) setWH(S.wh);
@@ -1024,8 +1025,12 @@ document.getElementById('btn-export').addEventListener('click',()=>{
 // ─── INIT ────────────────────────────────────────────────────
 (function init(){
   S.cfg=loadCfg();
-  if(S.cfg.oh) refresh();
-  else setTimeout(openSettings,300);
+  const urlWH=new URLSearchParams(location.search).get('wh');
+  if(S.cfg.oh){
+    refresh().then(()=>{
+      if(urlWH&&S.warehouses.includes(urlWH)) setWH(urlWH);
+    });
+  } else setTimeout(openSettings,300);
 })();
 </script>
 </body>

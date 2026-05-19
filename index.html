@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Health Scorecard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#f8fafc;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.logo{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#3b82f6;margin-bottom:16px}
+h1{font-size:32px;font-weight:700;color:#f8fafc;text-align:center;line-height:1.2}
+.sub{font-size:15px;color:#64748b;margin-top:10px;text-align:center;max-width:420px;line-height:1.6}
+.divider{width:40px;height:2px;background:#1e293b;margin:32px auto}
+.section-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#475569;text-align:center;margin-bottom:16px}
+.wh-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;max-width:640px;width:100%}
+.wh-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px 22px;cursor:pointer;transition:all .15s;text-decoration:none;display:flex;align-items:center;gap:14px}
+.wh-card:hover{background:#2d3f55;border-color:#3b82f6;transform:translateY(-1px);box-shadow:0 4px 20px rgba(59,130,246,.15)}
+.wh-icon{width:36px;height:36px;background:#0f172a;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.wh-icon svg{width:18px;height:18px;stroke:#3b82f6}
+.wh-name{font-size:14px;font-weight:600;color:#f1f5f9}
+.wh-hint{font-size:11px;color:#64748b;margin-top:2px}
+.setup-box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:28px 32px;text-align:center;max-width:400px;width:100%}
+.setup-box h2{font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:8px}
+.setup-box p{font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .15s;text-decoration:none}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-ghost{background:transparent;color:#64748b;border:1px solid #334155;font-size:12px;padding:7px 14px}.btn-ghost:hover{border-color:#475569;color:#94a3b8}
+.footer{margin-top:40px;font-size:11px;color:#334155;text-align:center}
+#wh-section{display:none;width:100%;max-width:640px}
+#setup-section{display:none;width:100%;max-width:400px}
+</style>
+</head>
+<body>
+
+<div class="logo">Odeko · Procurement</div>
+<h1>Inventory Health<br>Scorecard</h1>
+<p class="sub">Select a warehouse to view its inventory health scorecard, scoring engine, and brand evaluation.</p>
+
+<div class="divider"></div>
+
+<div id="wh-section">
+  <div class="section-label">Select a warehouse</div>
+  <div class="wh-grid" id="wh-grid"></div>
+  <div style="text-align:center;margin-top:20px">
+    <a href="inventory-dashboard.html" class="btn btn-ghost">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      Configure Sources
+    </a>
+  </div>
+</div>
+
+<div id="setup-section">
+  <div class="setup-box">
+    <h2>Get started</h2>
+    <p>Connect your Google Sheets data sources to load the scorecard. You only need to do this once — settings are saved automatically.</p>
+    <a href="inventory-dashboard.html" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Configure Data Sources
+    </a>
+  </div>
+</div>
+
+<div class="footer">Inventory Health Scorecard · Powered by Claude</div>
+
+<script>
+const warehouses = JSON.parse(localStorage.getItem('inv_dash_warehouses') || 'null');
+
+if (warehouses && warehouses.length) {
+  document.getElementById('wh-section').style.display = 'block';
+  const grid = document.getElementById('wh-grid');
+  warehouses.forEach(wh => {
+    const a = document.createElement('a');
+    a.className = 'wh-card';
+    a.href = `inventory-dashboard.html?wh=${encodeURIComponent(wh)}`;
+    a.innerHTML = `
+      <div class="wh-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      </div>
+      <div>
+        <div class="wh-name">${wh}</div>
+        <div class="wh-hint">View scorecard →</div>
+      </div>`;
+    grid.appendChild(a);
+  });
+} else {
+  document.getElementById('setup-section').style.display = 'block';
+}
+</script>
+</body>
+</html>
