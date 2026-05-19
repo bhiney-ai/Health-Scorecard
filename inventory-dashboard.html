@@ -325,16 +325,23 @@ function toObjects(txt) {
 }
 
 // ─── FETCH ───────────────────────────────────────────────────
+const PROXY='https://corsproxy.io/?';
 async function fetchCSV(url) {
   if (!url) return [];
-  url = url.replace('/edit#gid=','/export?format=csv&gid=').replace('/edit?','/export?format=csv&').replace(/\/edit$/,'/export?format=csv');
-  if (!url.includes('export?format=csv')&&!url.includes('tqx=out:csv')) {
-    const m=url.match(/\/d\/([^/]+)/);
-    if(m) url=`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`;
+  url = url.replace('/edit#gid=','/export?format=csv&gid=').replace(/[?&]usp=[^&]*/,'').replace(/\/edit.*#gid=/,'/export?format=csv&gid=').replace(/\/edit$/,'/export?format=csv');
+  if (!url.includes('export?format=csv')) {
+    const m=url.match(/\/d\/([^/]+).*[?&]gid=(\d+)/);
+    if(m) url=`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${m[2]}`;
   }
-  const r=await fetch(url,{cache:'no-cache'});
-  if(!r.ok) throw new Error(`HTTP ${r.status}`);
-  return toObjects(await r.text());
+  async function attempt(u){
+    const r=await fetch(u,{cache:'no-cache'});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const txt=await r.text();
+    if(txt.trim().startsWith('<!')) throw new Error('Got HTML — sheet may not be public');
+    return toObjects(txt);
+  }
+  try { return await attempt(url); } catch(_) {}
+  return attempt(PROXY+encodeURIComponent(url));
 }
 async function fetchAll(cfg) {
   const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'];
