@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Health Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;color:#1e293b;height:100vh;display:flex;overflow:hidden}
+#sidebar{width:220px;min-width:220px;background:#0f172a;display:flex;flex-direction:column;z-index:10}
+#sidebar-header{padding:20px 16px 16px;border-bottom:1px solid #1e293b}
+#sidebar-header h1{font-size:13px;font-weight:700;color:#f8fafc;letter-spacing:.05em;text-transform:uppercase}
+#sidebar-header p{font-size:11px;color:#64748b;margin-top:2px}
+#nav-items{flex:1;padding:8px 0;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-left:3px solid transparent;color:#94a3b8;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+.nav-item:hover{color:#f1f5f9;background:#1e293b}
+.nav-item.active{color:#60a5fa;background:#1e293b;border-left-color:#3b82f6}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+#sidebar-footer{padding:12px 8px;border-top:1px solid #1e293b}
+.nav-sm{display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer;border-radius:6px;color:#64748b;font-size:12px;transition:all .15s}
+.nav-sm:hover{color:#f1f5f9;background:#1e293b}
+.nav-sm svg{width:14px;height:14px}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+#topbar h2{font-size:15px;font-weight:600;color:#1e293b;margin-right:auto}
+select.wh-sel{padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;color:#1e293b;cursor:pointer;min-width:130px}
+.btn{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;display:flex;align-items:center;gap:6px}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-outline{background:#fff;color:#475569;border:1px solid #cbd5e1}.btn-outline:hover{background:#f8fafc}
+.btn-ghost{background:transparent;color:#64748b;border:none;font-size:12px;padding:4px 10px}.btn-ghost:hover{background:#f1f5f9;color:#1e293b}
+.btn svg{width:14px;height:14px}
+#ts{font-size:11px;color:#94a3b8}
+#content{flex:1;overflow-y:auto;padding:20px}
+.view{display:none}.view.active{display:block}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.kpi-card{background:#fff;border-radius:10px;padding:16px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.kpi-label{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.kpi-value{font-size:22px;font-weight:700;color:#1e293b;line-height:1}
+.kpi-sub{font-size:11px;color:#94a3b8;margin-top:4px}
+.charts-row{display:grid;grid-template-columns:1fr 1fr 270px;gap:12px;margin-bottom:20px}
+.chart-card{background:#fff;border-radius:10px;padding:16px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.chart-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.table-card{background:#fff;border-radius:10px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,.05);overflow:hidden}
+.tbl-head{padding:10px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:10px}
+.tbl-head h3{font-size:13px;font-weight:700;color:#1e293b}
+.tbl-count{font-size:12px;color:#94a3b8;margin-left:auto}
+.tbl-scroll{overflow-x:auto;max-height:580px;overflow-y:auto}
+table.dt{width:100%;border-collapse:collapse;font-size:12px}
+table.dt th{position:sticky;top:0;background:#f8fafc;padding:7px 9px;text-align:left;font-weight:600;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #e2e8f0;cursor:pointer;white-space:nowrap;user-select:none}
+table.dt th:hover{background:#f1f5f9;color:#1e293b}
+table.dt th.sa::after{content:' ↑'}table.dt th.sd::after{content:' ↓'}
+table.dt td{padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#334155;white-space:nowrap}
+table.dt tr:hover td{background:#f8fafc}
+table.dt tr:last-child td{border-bottom:none}
+.fbar{padding:9px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fbar input,.fbar select{padding:5px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;background:#fff;color:#1e293b;height:29px}
+.fbar input{min-width:170px}
+.rec{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.rk{background:#dcfce7;color:#16a34a}.rw{background:#fef9c3;color:#92400e}.rs{background:#fee2e2;color:#dc2626}
+.aa{background:#dbeafe;color:#1e40af;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
+.ab{background:#e0e7ff;color:#3730a3;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
+.ac{background:#f3f4f6;color:#374151;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
+.xx{background:#d1fae5;color:#065f46;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
+.xy{background:#fef9c3;color:#92400e;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
+.xz{background:#fee2e2;color:#991b1b;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
+.tr{text-align:right}.num{font-variant-numeric:tabular-nums}.muted{color:#94a3b8}
+.matrix-wrap table{border-collapse:collapse;width:100%;font-size:12px}
+.matrix-wrap th,.matrix-wrap td{padding:7px 10px;text-align:center;border:1px solid #f1f5f9}
+.matrix-wrap th{background:#f8fafc;font-weight:700;color:#475569;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e2e8f0}
+.matrix-wrap .rl{text-align:left;background:#f8fafc;font-weight:700;color:#475569}
+.ax{background:#bbf7d0;color:#166534;font-weight:700}.ay{background:#d1fae5;color:#065f46;font-weight:700}.az{background:#fef9c3;color:#854d0e;font-weight:700}
+.bx{background:#dbeafe;color:#1d4ed8;font-weight:700}.by{background:#e0e7ff;color:#3730a3;font-weight:700}.bz{background:#fed7aa;color:#c2410c;font-weight:700}
+.cx{background:#fef3c7;color:#b45309;font-weight:700}.cy{background:#ffedd5;color:#c2410c;font-weight:700}.cz{background:#fee2e2;color:#991b1b;font-weight:700}
+.ct{background:#f1f5f9;color:#475569;font-weight:700}
+.empty{padding:60px;text-align:center;color:#94a3b8}
+.empty h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#64748b}
+.empty p{font-size:13px;line-height:1.6}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading{padding:40px;text-align:center;color:#94a3b8;font-size:13px;display:none}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-bg.hidden{display:none}
+.modal{background:#fff;border-radius:12px;width:680px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mh{padding:18px 22px 14px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between}
+.mh h2{font-size:16px;font-weight:700}
+.mb{padding:22px}
+.mf{padding:14px 22px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:10px}
+.fg{margin-bottom:15px}
+.fl{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px}
+.fl span{font-size:11px;color:#94a3b8;font-weight:400}
+.fi{width:100%;padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;color:#1e293b;background:#fff;outline:none}
+.fi:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+.fhint{font-size:11px;color:#94a3b8;margin-top:3px}
+.msec{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin:18px 0 12px}
+.alert{padding:10px 13px;border-radius:7px;font-size:12px;margin-bottom:12px}
+.ai{background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe}
+.ae{background:#fee2e2;color:#dc2626;border:1px solid #fecaca}
+.rev-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.rev-tbl th{padding:5px 9px;text-align:left;font-weight:600;color:#475569;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e2e8f0}
+.rev-tbl td{padding:5px 9px;border-bottom:1px solid #f1f5f9}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#f1f5f9}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <div id="sidebar-header">
+    <h1>Inventory Health</h1>
+    <p id="wh-label">No warehouse loaded</p>
+  </div>
+  <div id="nav-items">
+    <div class="nav-item active" data-view="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard
+    </div>
+    <div class="nav-item" data-view="score-engine">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Score Engine
+    </div>
+    <div class="nav-item" data-view="on-hand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>On Hand
+    </div>
+    <div class="nav-item" data-view="brand-eval">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Brand Evaluation
+    </div>
+    <div class="nav-item" data-view="summary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Summary
+    </div>
+  </div>
+  <div id="sidebar-footer">
+    <div class="nav-sm" id="btn-settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>Configure Sources
+    </div>
+  </div>
+</nav>
+
+<div id="main">
+  <div id="topbar">
+    <h2 id="page-title">Dashboard</h2>
+    <select class="wh-sel" id="wh-picker"><option value="">— Select Warehouse —</option></select>
+    <button class="btn btn-outline" id="btn-refresh">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh
+    </button>
+    <button class="btn btn-primary" id="btn-export">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Excel
+    </button>
+    <span id="ts"></span>
+  </div>
+
+  <div id="content">
+
+    <!-- DASHBOARD -->
+    <div class="view active" id="view-dashboard">
+      <div class="loading" id="dash-loading"><span class="spinner"></span>Loading data…</div>
+      <div class="empty" id="dash-empty">
+        <h3>No data loaded</h3>
+        <p>Click <strong>Configure Sources</strong> in the sidebar to add your Google Sheets URLs.</p>
+      </div>
+      <div id="dash-content" style="display:none">
+        <div class="kpi-grid" id="kpi-grid"></div>
+        <div class="charts-row">
+          <div class="chart-card"><div class="chart-title">12-Month Revenue by Category</div><div style="position:relative;height:220px"><canvas id="chart-rev"></canvas></div></div>
+          <div class="chart-card"><div class="chart-title">ABC-XYZ Matrix (Item Count)</div><div class="matrix-wrap" id="matrix"></div><div style="margin-top:8px;font-size:10px;color:#94a3b8"><span style="background:#bbf7d0;color:#166534;padding:1px 5px;border-radius:2px">A-X</span> Best &nbsp;<span style="background:#fee2e2;color:#991b1b;padding:1px 5px;border-radius:2px">C-Z</span> Worst</div></div>
+          <div class="chart-card"><div class="chart-title">Recommendation Mix</div><div style="position:relative;height:170px"><canvas id="chart-rec"></canvas></div><div id="rec-legend" style="margin-top:8px;font-size:10px;line-height:1.8"></div></div>
+        </div>
+        <div class="two-col">
+          <div class="table-card">
+            <div class="tbl-head"><h3>Revenue &amp; Cost by ABC Class</h3></div>
+            <div style="padding:12px 14px"><table class="rev-tbl" id="abc-dist"></table></div>
+          </div>
+          <div class="table-card">
+            <div class="tbl-head"><h3>Category Performance</h3></div>
+            <div class="tbl-scroll"><table class="dt" id="cat-tbl"></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCORE ENGINE -->
+    <div class="view" id="view-score-engine">
+      <div class="table-card">
+        <div class="fbar">
+          <input type="text" id="se-q" placeholder="Search item or brand…">
+          <select id="se-rec"><option value="">All Recommendations</option><option>KEEP</option><option>WATCH</option><option>SUNSET</option></select>
+          <select id="se-abc"><option value="">All ABC</option><option>A</option><option>B</option><option>C</option></select>
+          <select id="se-xyz"><option value="">All XYZ</option><option>X</option><option>Y</option><option>Z</option></select>
+          <select id="se-cat"><option value="">All Categories</option></select>
+          <select id="se-status"><option value="">All Status</option><option>Active</option><option>Inactive</option></select>
+          <button class="btn btn-ghost" id="se-clear">Clear</button>
+          <span class="tbl-count" id="se-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt" id="se-tbl"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ON HAND -->
+    <div class="view" id="view-on-hand">
+      <div class="table-card">
+        <div class="fbar">
+          <input type="text" id="oh-q" placeholder="Search item or brand…">
+          <select id="oh-cat"><option value="">All Categories</option></select>
+          <select id="oh-brand"><option value="">All Brands</option></select>
+          <button class="btn btn-ghost" id="oh-clear">Clear</button>
+          <span class="tbl-count" id="oh-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt" id="oh-tbl"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- BRAND EVAL -->
+    <div class="view" id="view-brand-eval">
+      <div class="table-card">
+        <div class="fbar">
+          <input type="text" id="be-q" placeholder="Search brand…">
+          <select id="be-cat"><option value="">All Categories</option></select>
+          <select id="be-rec"><option value="">All Recommendations</option><option>KEEP</option><option>TRIM</option><option>EXIT BRAND</option></select>
+          <button class="btn btn-ghost" id="be-clear">Clear</button>
+          <span class="tbl-count" id="be-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt" id="be-tbl"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="view" id="view-summary">
+      <div class="table-card">
+        <div class="fbar">
+          <input type="text" id="sum-q" placeholder="Search item or brand…">
+          <select id="sum-abc"><option value="">All ABC</option><option>A</option><option>B</option><option>C</option></select>
+          <select id="sum-xyz"><option value="">All XYZ</option><option>X</option><option>Y</option><option>Z</option></select>
+          <select id="sum-cat"><option value="">All Categories</option></select>
+          <button class="btn btn-ghost" id="sum-clear">Clear</button>
+          <span class="tbl-count" id="sum-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt" id="sum-tbl"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-bg hidden" id="settings-modal">
+  <div class="modal">
+    <div class="mh">
+      <h2>Configure Data Sources</h2>
+      <button class="btn btn-ghost" id="close-settings" style="padding:4px 8px">✕</button>
+    </div>
+    <div class="mb">
+      <div class="alert ai">
+        <strong>Google Sheets CSV URL:</strong> Open the sheet tab → address bar URL → change <code>/edit#gid=XXXX</code> to <code>/export?format=csv&amp;gid=XXXX</code>.<br>
+        <strong>CORS:</strong> Serve this file via <code>python3 -m http.server 8080</code>, then open <code>http://localhost:8080</code>.
+      </div>
+      <div class="msec">Required Sources</div>
+      <div class="fg"><label class="fl">On Hand <span>— inventory quantities and costs</span></label><input class="fi" id="cfg-oh" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="fg"><label class="fl">ABC <span>— revenue classification (include sub-category classification)</span></label><input class="fi" id="cfg-abc" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="fg"><label class="fl">XYZ <span>— demand variability classification</span></label><input class="fi" id="cfg-xyz" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="fg"><label class="fl">Active Customers — SKU Level <span>— # ordering customers per item per warehouse</span></label><input class="fi" id="cfg-cust-sku" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="fg"><label class="fl">Active Customers — Market Level <span>— total customer count per warehouse (denominator for Customer %)</span></label><input class="fi" id="cfg-cust-mkt" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="fg"><label class="fl">Customer Margin <span>— net revenue, cost amount, margin %</span></label><input class="fi" id="cfg-margin" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="fg"><label class="fl">Stock Ledger <span>— beginning &amp; ending on-hand value → avg inv → ITO / DIO / GMROI</span></label><input class="fi" id="cfg-ledger" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="fg"><label class="fl">Proc Model <span>— determines Active / Inactive status per item per warehouse</span></label><input class="fi" id="cfg-proc" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..."></div>
+      <div class="msec">Display</div>
+      <div class="fg"><label class="fl">Analysis Period Label</label><input class="fi" id="cfg-label" type="text" placeholder="e.g. March 2026"><div class="fhint">Shown in KPI cards</div></div>
+      <div id="cfg-err" class="alert ae" style="display:none"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-outline" id="btn-save-load">Save &amp; Load Data</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────
+const S = {
+  cfg: {}, raw: {}, joined: [], brandRows: [],
+  wh: null, warehouses: [], totalCust: {},
+  view: 'dashboard', charts: {},
+  sorts: { se:{col:null,dir:'asc'}, oh:{col:null,dir:'asc'}, be:{col:null,dir:'asc'}, sum:{col:null,dir:'asc'} },
+};
+
+// ─── CONFIG ──────────────────────────────────────────────────
+const CFG_KEY = 'inv_dash_v2';
+function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY)||'{}'); } catch { return {}; } }
+function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
+
+// ─── CSV ─────────────────────────────────────────────────────
+function parseCSV(txt) {
+  const rows=[]; let row=[],f='',q=false;
+  for (let i=0;i<txt.length;i++) {
+    const c=txt[i];
+    if (c==='"') { if(q&&txt[i+1]==='"'){f+='"';i++;} else q=!q; }
+    else if (c===','&&!q) { row.push(f);f=''; }
+    else if ((c==='\n'||c==='\r')&&!q) {
+      if(c==='\r'&&txt[i+1]==='\n')i++;
+      row.push(f); if(row.some(x=>x.trim())) rows.push(row);
+      row=[];f='';
+    } else f+=c;
+  }
+  if(f||row.length){row.push(f);if(row.some(x=>x.trim()))rows.push(row);}
+  return rows;
+}
+function toObjects(txt) {
+  const rows=parseCSV(txt); if(rows.length<2) return [];
+  let hi=0;
+  for(let i=0;i<Math.min(5,rows.length);i++){if(rows[i].some(c=>c.trim())){hi=i;break;}}
+  const hdrs=rows[hi].map(h=>h.trim());
+  return rows.slice(hi+1).map(r=>{const o={};hdrs.forEach((h,i)=>o[h]=(r[i]||'').trim());return o;}).filter(o=>Object.values(o).some(v=>v));
+}
+
+// ─── FETCH ───────────────────────────────────────────────────
+async function fetchCSV(url) {
+  if (!url) return [];
+  url = url.replace('/edit#gid=','/export?format=csv&gid=').replace('/edit?','/export?format=csv&').replace(/\/edit$/,'/export?format=csv');
+  if (!url.includes('export?format=csv')&&!url.includes('tqx=out:csv')) {
+    const m=url.match(/\/d\/([^/]+)/);
+    if(m) url=`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`;
+  }
+  const r=await fetch(url,{cache:'no-cache'});
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  return toObjects(await r.text());
+}
+async function fetchAll(cfg) {
+  const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'];
+  const urls=[cfg.oh,cfg.abc,cfg.xyz,cfg.custSku,cfg.custMkt,cfg.margin,cfg.ledger,cfg.proc];
+  const results=await Promise.allSettled(urls.map(u=>fetchCSV(u)));
+  const out={};
+  keys.forEach((k,i)=>{ out[k]=results[i].status==='fulfilled'?results[i].value:[]; });
+  return out;
+}
+
+// ─── COLUMN HELPERS ──────────────────────────────────────────
+function g(row,...keys){for(const k of keys){if(row&&row[k]!==undefined&&row[k]!==null&&row[k]!=='')return row[k];}return '';}
+function n(row,...keys){return parseFloat(g(row,...keys))||0;}
+
+// ─── WAREHOUSE DETECTION ─────────────────────────────────────
+const WH_COLS=['Warehouse Name','warehouse_name','Warehouse','warehouse','Warehouse (Picked) Warehouse Name'];
+function getWH(row){for(const c of WH_COLS){if(row[c]&&row[c].trim())return row[c].trim();}return '';}
+function detectWH(raw){
+  const whs=new Set();
+  Object.values(raw).flat().forEach(r=>{ const w=getWH(r); if(w&&w.length<20) whs.add(w); });
+  return [...whs].sort();
+}
+function filterWH(rows,wh){return rows.filter(r=>getWH(r)===wh);}
+
+// ─── TOTAL CUSTOMERS (market level) ──────────────────────────
+function parseTotalCust(mktRows) {
+  const map={};
+  // Format 1: rows with warehouse + customer count column
+  const custCols=['# Active Customers','Total Active Customers','Active Customers','# of Active Customers','total_customers','# Customers'];
+  mktRows.forEach(r=>{
+    const wh=getWH(r);
+    if(!wh) return;
+    for(const c of custCols){
+      const v=parseFloat(r[c]);
+      if(!isNaN(v)&&v>0){map[wh]=(map[wh]||0)+v;return;}
+    }
+  });
+  // Format 2: single-column numeric rows (just a number)
+  if(Object.keys(map).length===0&&mktRows.length>0){
+    const numericRows=mktRows.filter(r=>{const vals=Object.values(r);return vals.length<=3&&vals.some(v=>!isNaN(parseFloat(v))&&parseFloat(v)>0);});
+    numericRows.forEach(r=>{
+      const wh=getWH(r)||'default';
+      Object.values(r).forEach(v=>{const num=parseFloat(v);if(!isNaN(num)&&num>0)map[wh]=num;});
+    });
+  }
+  return map;
+}
+
+// ─── BUILD LOOKUPS ───────────────────────────────────────────
+function buildLookup(rows, ...idCols) {
+  const m={};
+  rows.forEach(r=>{
+    const id=String(g(r,...idCols)||'').trim();
+    if(id&&id!=='0') m[id]=r;
+  });
+  return m;
+}
+function buildLookupWH(rows, wh, ...idCols) {
+  const m={};
+  filterWH(rows,wh).forEach(r=>{
+    const id=String(g(r,...idCols)||'').trim();
+    if(id) m[id]=r;
+  });
+  return m;
+}
+
+// ─── VELOCITY PERCENTILE ─────────────────────────────────────
+// Matches Excel: COUNTIFS(cat=D2, xyzCol < this_xyz) / COUNTIF(cat=D2)
+function buildVelPct(xyzRows, wh) {
+  const whRows=filterWH(xyzRows,wh);
+  const catMap={}; // cat → [xyzClass]
+  whRows.forEach(r=>{
+    const cat=g(r,'Picked Items Category','Category','category');
+    const xyz=(g(r,'xyz_classification')||'').toUpperCase();
+    if(!cat||!xyz) return;
+    if(!catMap[cat]) catMap[cat]=[];
+    catMap[cat].push(xyz);
+  });
+  const pct={}; // cat → {X:p, Y:p, Z:p}
+  Object.entries(catMap).forEach(([cat,arr])=>{
+    const tot=arr.length;
+    pct[cat]={};
+    ['X','Y','Z'].forEach(cls=>{
+      pct[cat][cls]=tot>0?arr.filter(c=>c<cls).length/tot:0;
+    });
+  });
+  return pct;
+}
+
+// ─── SCORING (exact Excel formulas) ──────────────────────────
+function scoreDIO(status,dio){
+  if(status!=='Active') return 0;
+  if(dio>365) return 30; if(dio>180) return 25; if(dio>90) return 18;
+  if(dio>60) return 10; if(dio>30) return 5; return 0;
+}
+function scoreABC(status,catABC,subABC){
+  if(status!=='Active') return 0;
+  const s=c=>c==='C'?25:c==='B'?10:0;
+  return (s(catABC)+s(subABC))/2;
+}
+function scoreVelo(status,velPct,trendNorm){
+  if(status!=='Active') return 0;
+  let base;
+  if(velPct===null||velPct===undefined) base=20;
+  else if(velPct<=0.1) base=14;
+  else if(velPct<=0.25) base=11;
+  else if(velPct<=0.5) base=8;
+  else if(velPct<=0.75) base=4;
+  else if(velPct<=0.9) base=1;
+  else base=0;
+  const t=trendNorm;
+  const trend=t<-0.5?6:t<-0.2?4:t<0.1?2:0;
+  return base+trend;
+}
+function scoreCust(status,numC){
+  if(status!=='Active') return 0;
+  if(numC===0) return 15; if(numC<=2) return 12; if(numC<=5) return 9;
+  if(numC<=10) return 5; if(numC<=20) return 2; return 0;
+}
+function scoreGMROI(status,gmroi){
+  if(status!=='Active') return 0;
+  if(gmroi<0.5) return 10; if(gmroi<1) return 8; if(gmroi<1.5) return 5;
+  if(gmroi<2) return 3; if(gmroi<3) return 1; return 0;
+}
+function rec(status,total){
+  if(status!=='Active') return '';
+  if(total<40) return 'KEEP'; if(total<=54) return 'WATCH'; return 'SUNSET';
+}
+
+// ─── JOIN DATA ───────────────────────────────────────────────
+function joinData(raw, wh) {
+  const ohRows = filterWH(raw.oh, wh);
+  if(!ohRows.length) return [];
+
+  // Lookups — ledger and proc not warehouse-filtered (may not have WH column)
+  const abcById  = buildLookupWH(raw.abc,  wh, 'Item ID','item_id');
+  const xyzById  = buildLookup(raw.xyz, 'Netsuite Items Item ID','Item ID','item_id');
+  const custById = buildLookupWH(raw.custSku, wh, 'Item ID','item_id');
+  const mgnById  = buildLookupWH(raw.margin,  wh, 'Item ID','item_id');
+  const ledById  = buildLookup(raw.ledger, 'Internal ID','Item ID','item_id');
+  const procIds  = new Set(
+    raw.proc.filter(r=>g(r,'warehouse_name','Warehouse Name','warehouse').toUpperCase()===wh.toUpperCase())
+            .map(r=>String(g(r,'item_id','Item ID')||'').trim())
+  );
+  const totalCustWH = S.totalCust[wh] || 1;
+  const velPct = buildVelPct(raw.xyz, wh);
+
+  const rows = ohRows.map(item=>{
+    const id = String(g(item,'Item ID','item_id')||'').trim();
+    const abc  = abcById[id]  || {};
+    const xyz  = xyzById[id]  || {};
+    const cust = custById[id] || {};
+    const mgn  = mgnById[id]  || {};
+    const led  = ledById[id]  || {};
+
+    const status = procIds.size>0 ? (procIds.has(id)?'Active':'Inactive') : 'Active';
+    const category = g(item,'Item Category Name','Category Name','Category');
+    const subCat   = g(item,'item subcategory name','Sub Category Name','Sub Category');
+    const brand    = g(item,'Catalog Brand','Brand');
+    const itemName = g(item,'Item Name');
+    const saleUnit = g(item,'Sale Units Name');
+
+    // On Hand metrics
+    const qoh      = n(item,'quantity on hand eaches','Quantity On Hand');
+    const cons30   = n(item,'Consumption 30 Days');
+    const cons60   = n(item,'Consumption 60 Days');
+    const onOrder  = n(item,'Quantity on Order Each');
+    const avgCostEa= n(item,'Average Cost Dollars Eaches','Average Cost');
+    const ohCost   = n(item,'Total On Hand Cost');
+    const invPipe  = n(item,'Inv Pipe');
+    const totalVal = n(item,'Total Value');
+
+    // ABC
+    const rev12mo   = n(abc,'Invoiced Amount','invoiced_amount');
+    const catABC    = (g(abc,'inventory_classification')||'').toUpperCase();
+    const subCatABC = (g(abc,'sub_category_classification','Sub Category Classification','subcat_classification')||catABC).toUpperCase();
+
+    // XYZ
+    const xyzClass  = (g(xyz,'xyz_classification')||'').toUpperCase();
+    const units12mo = n(xyz,'Orders Deliveries and Invoices Invoiced Sales Units','Invoiced Sales Units','total_units');
+    const trendNorm = n(xyz,'trend_norm');
+    const coV       = n(xyz,'coefficient_of_variation');
+
+    // Customers
+    const numCust   = n(cust,'# of Ordering Customers','num_customers');
+    const custPct   = numCust / totalCustWH;
+
+    // Customer Margin
+    const netRev    = n(mgn,'net revenue','Net Revenue');
+    const costAmt   = n(mgn,'Cost Amount','cost_amount');
+    const marginPct = n(mgn,'Margin %','margin_pct','Margin');
+
+    // Stock Ledger → avg inv
+    const begOH  = n(led,'Beginning Inv On-hand Value','beginning_inv_value');
+    const endOH  = n(led,'Ending Inv On-hand Value','ending_inv_value');
+    const avgInvRaw = n(led,'avg inv','Avg Inv','avg_inv','Average Inventory');
+    const avgInv = avgInvRaw || (begOH+endOH)/2;
+
+    // Computed metrics (exact Excel formulas)
+    const ito   = avgInv>0 ? costAmt/avgInv : 0;
+    const dio   = costAmt>0 ? (avgInv/costAmt)*365 : 0;
+    const gmroi = avgInv>0 ? (netRev-costAmt)/avgInv : 0;
+
+    // Scoring
+    const catVelPct = (velPct[category]||{})[xyzClass] ?? null;
+    const dioSc   = scoreDIO(status,dio);
+    const abcSc   = scoreABC(status,catABC,subCatABC);
+    const veloSc  = scoreVelo(status,catVelPct,trendNorm);
+    const custSc  = scoreCust(status,numCust);
+    const gmroiSc = scoreGMROI(status,gmroi);
+    const total   = status==='Active' ? dioSc+abcSc+veloSc+custSc+gmroiSc : null;
+    const recommendation = rec(status,total);
+
+    return {id,brand,itemName,category,subCat,saleUnit,status,wh,
+      qoh,cons30,cons60,onOrder,avgCostEa,ohCost,invPipe,totalVal,
+      rev12mo,catABC,subCatABC,xyzClass,units12mo,trendNorm,coV,
+      numCust,custPct,netRev,costAmt,marginPct,avgInv,ito,dio,gmroi,
+      catVelPct,dioSc,abcSc,veloSc,custSc,gmroiSc,total,recommendation};
+  });
+
+  // Customer category %
+  const catCustTot={};
+  rows.forEach(r=>{catCustTot[r.category]=(catCustTot[r.category]||0)+r.numCust;});
+  rows.forEach(r=>{r.custCatPct=catCustTot[r.category]>0?r.numCust/catCustTot[r.category]:0;});
+
+  return rows;
+}
+
+// ─── BRAND AGGREGATION ───────────────────────────────────────
+function buildBrands(joined){
+  const map={};
+  joined.forEach(r=>{
+    const key=r.brand+'|||'+r.category;
+    if(!map[key]) map[key]={brand:r.brand,category:r.category,skus:0,rev:0,cost:0,aClass:0,bClass:0,cClass:0,xClass:0,zClass:0,dioArr:[],marginArr:[],gmroiArr:[],sunsetSkus:0,sunsetCust:0,sunsetRev:0};
+    const d=map[key];
+    d.skus++;d.rev+=r.rev12mo;d.cost+=r.ohCost;
+    if(r.catABC==='A')d.aClass++;else if(r.catABC==='B')d.bClass++;else if(r.catABC==='C')d.cClass++;
+    if(r.xyzClass==='X')d.xClass++;else if(r.xyzClass==='Z')d.zClass++;
+    if(r.dio>0&&r.dio<99999)d.dioArr.push(r.dio);
+    if(r.marginPct!==0)d.marginArr.push(r.marginPct);
+    if(r.gmroi!==0)d.gmroiArr.push(r.gmroi);
+    if(r.recommendation==='SUNSET'){d.sunsetSkus++;d.sunsetCust+=r.numCust;d.sunsetRev+=r.rev12mo;}
+  });
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
+  return Object.values(map).map(d=>{
+    const pctSunset=d.skus>0?d.sunsetSkus/d.skus:0;
+    const revRetention=d.rev-d.sunsetRev;
+    const revRetPct=d.rev>0?revRetention/d.rev:0;
+    const brandRec=pctSunset===1?'EXIT BRAND':pctSunset>0?'TRIM':'KEEP';
+    return {...d,avgDIO:avg(d.dioArr),avgMargin:avg(d.marginArr),avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
+  }).sort((a,b)=>b.rev-a.rev);
+}
+
+// ─── FORMAT HELPERS ──────────────────────────────────────────
+function $m(v){if(isNaN(v)||v===null)return '—';const a=Math.abs(v);if(a>=1e6)return '$'+(v/1e6).toFixed(1)+'M';if(a>=1e3)return '$'+(v/1e3).toFixed(0)+'K';return '$'+Number(v).toFixed(0);}
+function $m2(v){return isNaN(v)?'—':'$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function $pct(v,d=1){return isNaN(v)?'—':(v*100).toFixed(d)+'%';}
+function $fix(v,d=2){return isNaN(v)||v===null?'—':Number(v).toFixed(d);}
+function $int(v){return isNaN(v)?'—':Math.round(Number(v)).toLocaleString();}
+function abcBadge(v){const cls={A:'aa',B:'ab',C:'ac'}[v]||'ac';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
+function xyzBadge(v){const cls={X:'xx',Y:'xy',Z:'xz'}[v]||'xz';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
+function recBadge(v){if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP'?'rk':v==='WATCH'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
+
+// ─── NAV ─────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const view=el.dataset.view;
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(`view-${view}`).classList.add('active');
+    S.view=view;
+    document.getElementById('page-title').textContent=el.textContent.trim();
+    renderView();
+  });
+});
+
+// ─── SETTINGS ────────────────────────────────────────────────
+document.getElementById('btn-settings').addEventListener('click',openSettings);
+document.getElementById('close-settings').addEventListener('click',closeSettings);
+document.getElementById('settings-modal').addEventListener('click',e=>{if(e.target.id==='settings-modal')closeSettings();});
+function openSettings(){
+  const c=S.cfg;
+  ['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'].forEach(k=>{const el=document.getElementById(`cfg-${k==='custSku'?'cust-sku':k==='custMkt'?'cust-mkt':k}`);if(el)el.value=c[k]||'';});
+  document.getElementById('cfg-label').value=c.label||'';
+  document.getElementById('cfg-err').style.display='none';
+  document.getElementById('settings-modal').classList.remove('hidden');
+}
+function closeSettings(){document.getElementById('settings-modal').classList.add('hidden');}
+document.getElementById('btn-save-load').addEventListener('click',async()=>{
+  const cfg={
+    oh:document.getElementById('cfg-oh').value.trim(),
+    abc:document.getElementById('cfg-abc').value.trim(),
+    xyz:document.getElementById('cfg-xyz').value.trim(),
+    custSku:document.getElementById('cfg-cust-sku').value.trim(),
+    custMkt:document.getElementById('cfg-cust-mkt').value.trim(),
+    margin:document.getElementById('cfg-margin').value.trim(),
+    ledger:document.getElementById('cfg-ledger').value.trim(),
+    proc:document.getElementById('cfg-proc').value.trim(),
+    label:document.getElementById('cfg-label').value.trim(),
+  };
+  if(!cfg.oh){showErr('On Hand URL is required.');return;}
+  saveCfg(cfg);S.cfg=cfg;
+  closeSettings();
+  await refresh();
+});
+function showErr(msg){const e=document.getElementById('cfg-err');e.textContent=msg;e.style.display='block';}
+
+// ─── REFRESH ─────────────────────────────────────────────────
+document.getElementById('btn-refresh').addEventListener('click',refresh);
+async function refresh(){
+  if(!S.cfg.oh){openSettings();return;}
+  document.getElementById('dash-loading').style.display='block';
+  document.getElementById('dash-empty').style.display='none';
+  document.getElementById('dash-content').style.display='none';
+  try {
+    S.raw=await fetchAll(S.cfg);
+    S.warehouses=detectWH(S.raw);
+    S.totalCust=parseTotalCust(S.raw.custMkt);
+    populateWHPicker();
+    if(!S.wh&&S.warehouses.length) setWH(S.warehouses[0]);
+    else if(S.wh) setWH(S.wh);
+    document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('dash-loading').style.display='none';
+    document.getElementById('dash-empty').style.display='block';
+    alert('Error loading data: '+e.message+'\n\nMake sure you are serving this file via HTTP (not file://) and the sheets are publicly shared.');
+  }
+  document.getElementById('dash-loading').style.display='none';
+}
+
+// ─── WAREHOUSE ───────────────────────────────────────────────
+function populateWHPicker(){
+  const sel=document.getElementById('wh-picker');
+  sel.innerHTML='<option value="">— Select Warehouse —</option>';
+  S.warehouses.forEach(w=>{const o=document.createElement('option');o.value=w;o.textContent=w;sel.appendChild(o);});
+  if(S.wh) sel.value=S.wh;
+}
+document.getElementById('wh-picker').addEventListener('change',e=>setWH(e.target.value));
+function setWH(wh){
+  S.wh=wh;
+  document.getElementById('wh-picker').value=wh;
+  document.getElementById('wh-label').textContent=wh||'None';
+  if(wh){
+    S.joined=joinData(S.raw,wh);
+    S.brandRows=buildBrands(S.joined);
+    populateFilterDropdowns();
+  }
+  renderView();
+}
+function renderView(){
+  switch(S.view){
+    case 'dashboard':  renderDashboard();break;
+    case 'score-engine':renderScoreEngine();break;
+    case 'on-hand':   renderOnHand();break;
+    case 'brand-eval':renderBrandEval();break;
+    case 'summary':   renderSummary();break;
+  }
+}
+
+// ─── FILTER DROPDOWNS ────────────────────────────────────────
+function populateFilterDropdowns(){
+  const cats=[...new Set(S.joined.map(r=>r.category).filter(Boolean))].sort();
+  const brands=[...new Set(S.joined.map(r=>r.brand).filter(Boolean))].sort();
+  function fill(id,vals){
+    const sel=document.getElementById(id);if(!sel)return;
+    const cur=sel.value;const first=sel.options[0];
+    sel.innerHTML='';sel.appendChild(first);
+    vals.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o);});
+    if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+  }
+  fill('se-cat',cats);fill('oh-cat',cats);fill('oh-brand',brands);fill('be-cat',cats);fill('sum-cat',cats);
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────
+function renderDashboard(){
+  const J=S.joined;
+  if(!J.length){document.getElementById('dash-empty').style.display='block';document.getElementById('dash-content').style.display='none';return;}
+  document.getElementById('dash-empty').style.display='none';
+  document.getElementById('dash-content').style.display='block';
+
+  const totalSKUs=J.length;
+  const activeSKUs=J.filter(r=>r.rev12mo>0||r.numCust>0).length;
+  const totalCost=J.reduce((s,r)=>s+r.ohCost,0);
+  const totalRev=J.reduce((s,r)=>s+r.rev12mo,0);
+  const overstocked=J.filter(r=>r.dio>180).length;
+  const strandedCost=J.filter(r=>r.rev12mo===0&&r.ohCost>0).reduce((s,r)=>s+r.ohCost,0);
+  const label=S.cfg.label||new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
+
+  document.getElementById('kpi-grid').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Total SKUs</div><div class="kpi-value">${$int(totalSKUs)}</div><div class="kpi-sub">${S.wh} · ${label}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Active SKUs</div><div class="kpi-value">${$int(activeSKUs)}</div><div class="kpi-sub">${$pct(activeSKUs/totalSKUs)} of catalog</div></div>
+    <div class="kpi-card"><div class="kpi-label">Inventory Value</div><div class="kpi-value" style="font-size:18px">${$m(totalCost)}</div><div class="kpi-sub">On-hand cost</div></div>
+    <div class="kpi-card"><div class="kpi-label">12-Mo Revenue</div><div class="kpi-value" style="font-size:18px">${$m(totalRev)}</div><div class="kpi-sub">Invoiced amount</div></div>
+    <div class="kpi-card"><div class="kpi-label">Overstocked</div><div class="kpi-value">${$int(overstocked)}</div><div class="kpi-sub" style="color:#dc2626">DIO &gt; 180 days</div></div>
+    <div class="kpi-card"><div class="kpi-label">Inactive w/ Stock</div><div class="kpi-value" style="font-size:18px">${$m(strandedCost)}</div><div class="kpi-sub" style="color:#dc2626">Stranded cost</div></div>`;
+
+  // Matrix
+  const mx={A:{X:0,Y:0,Z:0},B:{X:0,Y:0,Z:0},C:{X:0,Y:0,Z:0}};
+  J.forEach(r=>{if(mx[r.catABC]&&r.xyzClass)mx[r.catABC][r.xyzClass]++;});
+  const tX=mx.A.X+mx.B.X+mx.C.X,tY=mx.A.Y+mx.B.Y+mx.C.Y,tZ=mx.A.Z+mx.B.Z+mx.C.Z;
+  const tA=mx.A.X+mx.A.Y+mx.A.Z,tB=mx.B.X+mx.B.Y+mx.B.Z,tC=mx.C.X+mx.C.Y+mx.C.Z;
+  document.getElementById('matrix').innerHTML=`<table>
+    <thead><tr><th></th><th>X — Steady</th><th>Y — Moderate</th><th>Z — Volatile</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td class="rl">A — High</td><td class="ax">${mx.A.X}</td><td class="ay">${mx.A.Y}</td><td class="az">${mx.A.Z}</td><td class="ct">${tA}</td></tr>
+      <tr><td class="rl">B — Mid</td><td class="bx">${mx.B.X}</td><td class="by">${mx.B.Y}</td><td class="bz">${mx.B.Z}</td><td class="ct">${tB}</td></tr>
+      <tr><td class="rl">C — Low</td><td class="cx">${mx.C.X}</td><td class="cy">${mx.C.Y}</td><td class="cz">${mx.C.Z}</td><td class="ct">${tC}</td></tr>
+      <tr><td class="rl">Total</td><td class="ct">${tX}</td><td class="ct">${tY}</td><td class="ct">${tZ}</td><td class="ct" style="font-weight:700">${tX+tY+tZ}</td></tr>
+    </tbody></table>`;
+
+  // Revenue by category chart
+  const catRevMap={};
+  J.forEach(r=>{catRevMap[r.category]=(catRevMap[r.category]||0)+r.rev12mo;});
+  const catsSorted=Object.entries(catRevMap).sort((a,b)=>b[1]-a[1]);
+  destroyChart('chart-rev');
+  const ctx1=document.getElementById('chart-rev').getContext('2d');
+  S.charts['chart-rev']=new Chart(ctx1,{type:'bar',data:{labels:catsSorted.map(e=>e[0]),datasets:[{data:catsSorted.map(e=>e[1]),backgroundColor:'#3b82f6',borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${$m(c.parsed.x)}`}}},scales:{x:{ticks:{callback:v=>$m(v),font:{size:10}},grid:{color:'#f1f5f9'}},y:{ticks:{font:{size:10}},grid:{display:false}}}}});
+
+  // Rec donut
+  const recMap={};
+  J.forEach(r=>{if(r.recommendation)recMap[r.recommendation]=(recMap[r.recommendation]||0)+1;});
+  const recOrder=['KEEP','WATCH','SUNSET'];
+  const recLabels=recOrder.filter(k=>recMap[k]);
+  const recCounts=recLabels.map(k=>recMap[k]);
+  const recColors={KEEP:'#22c55e',WATCH:'#f59e0b',SUNSET:'#ef4444'};
+  destroyChart('chart-rec');
+  const ctx2=document.getElementById('chart-rec').getContext('2d');
+  S.charts['chart-rec']=new Chart(ctx2,{type:'doughnut',data:{labels:recLabels,datasets:[{data:recCounts,backgroundColor:recLabels.map(l=>recColors[l]),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.label}: ${c.parsed}`}}}}});
+  document.getElementById('rec-legend').innerHTML=recLabels.map(l=>`<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:8px;height:8px;border-radius:50%;background:${recColors[l]};flex-shrink:0"></span>${l}: ${recMap[l]}</span>`).join('');
+
+  // ABC distribution table
+  const abcDist={A:{skus:0,cost:0,rev:0,gmroi:[]},B:{skus:0,cost:0,rev:0,gmroi:[]},C:{skus:0,cost:0,rev:0,gmroi:[]}};
+  J.forEach(r=>{const d=abcDist[r.catABC];if(!d)return;d.skus++;d.cost+=r.ohCost;d.rev+=r.rev12mo;if(r.gmroi)d.gmroi.push(r.gmroi);});
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
+  document.getElementById('abc-dist').innerHTML=`<thead><tr><th>Class</th><th class="tr">SKUs</th><th class="tr">OH Cost</th><th class="tr">12-Mo Rev</th><th class="tr">Rev %</th><th class="tr">Avg GMROI</th></tr></thead><tbody>`+
+    ['A','B','C'].map(cls=>{const d=abcDist[cls];return `<tr><td>${abcBadge(cls)}</td><td class="tr num">${d.skus}</td><td class="tr num">${$m(d.cost)}</td><td class="tr num">${$m(d.rev)}</td><td class="tr num">${$pct(totalRev?d.rev/totalRev:0)}</td><td class="tr num">${$fix(avg(d.gmroi))}</td></tr>`;}).join('')+'</tbody>';
+
+  // Category performance
+  const catMap2={};
+  J.forEach(r=>{
+    if(!catMap2[r.category])catMap2[r.category]={skus:0,rev:0,cost:0,ito:[],dio:[],gmroi:[],keep:0,watch:0,sunset:0};
+    const d=catMap2[r.category];d.skus++;d.rev+=r.rev12mo;d.cost+=r.ohCost;
+    if(r.ito)d.ito.push(r.ito);if(r.dio>0&&r.dio<99999)d.dio.push(r.dio);if(r.gmroi)d.gmroi.push(r.gmroi);
+    if(r.recommendation==='KEEP')d.keep++;else if(r.recommendation==='WATCH')d.watch++;else if(r.recommendation==='SUNSET')d.sunset++;
+  });
+  const catRows=Object.entries(catMap2).sort((a,b)=>b[1].rev-a[1].rev).map(([cat,d])=>`<tr>
+    <td>${cat}</td><td class="tr num">${d.skus}</td><td class="tr num">${$m(d.rev)}</td><td class="tr num">${$m(d.cost)}</td>
+    <td class="tr num">${$fix(avg(d.ito))}</td><td class="tr num">${$fix(avg(d.dio),0)}</td><td class="tr num">${$fix(avg(d.gmroi))}</td>
+    <td class="tr"><span class="rec rk">${d.keep}</span> <span class="rec rw">${d.watch}</span> <span class="rec rs">${d.sunset}</span></td>
+  </tr>`).join('');
+  document.getElementById('cat-tbl').innerHTML=`<thead><tr><th>Category</th><th class="tr">SKUs</th><th class="tr">Revenue</th><th class="tr">OH Cost</th><th class="tr">Avg ITO</th><th class="tr">Avg DIO</th><th class="tr">Avg GMROI</th><th class="tr">K/W/S</th></tr></thead><tbody>${catRows}</tbody>`;
+}
+function destroyChart(id){if(S.charts[id]){S.charts[id].destroy();delete S.charts[id];}}
+
+// ─── GENERIC TABLE RENDERER ───────────────────────────────────
+function makeTable(tblId,countId,cols,rows,sortState){
+  const countEl=document.getElementById(countId);
+  if(countEl)countEl.textContent=`${rows.length.toLocaleString()} items`;
+  const tbl=document.getElementById(tblId);
+  const thead=tbl.querySelector('thead');
+  const tbody=tbl.querySelector('tbody');
+  if(!thead.innerHTML){
+    thead.innerHTML='<tr>'+cols.map(c=>`<th data-col="${c.label}"${c.w?` style="min-width:${c.w}"`:''}>${c.label}</th>`).join('')+'</tr>';
+    thead.querySelectorAll('th').forEach(th=>{
+      th.addEventListener('click',()=>{
+        const lbl=th.dataset.col;
+        if(sortState.col===lbl)sortState.dir=sortState.dir==='asc'?'desc':'asc';
+        else{sortState.col=lbl;sortState.dir='asc';}
+        thead.querySelectorAll('th').forEach(t=>t.className='');
+        th.className=`s${sortState.dir[0]}`;
+        renderView();
+      });
+    });
+  }
+  // Sync sort classes
+  thead.querySelectorAll('th').forEach(th=>{
+    th.className=th.dataset.col===sortState.col?`s${sortState.dir[0]}`:'';
+  });
+  tbody.innerHTML=rows.map(r=>'<tr>'+cols.map(c=>c.render(r)).join('')+'</tr>').join('');
+}
+function sortRows(rows,cols,sortState){
+  if(!sortState.col)return rows;
+  const col=cols.find(c=>c.label===sortState.col);
+  if(!col)return rows;
+  return [...rows].sort((a,b)=>{
+    let va=col.val?col.val(a):a[col.key]||'';
+    let vb=col.val?col.val(b):b[col.key]||'';
+    const na=parseFloat(va),nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb)){va=na;vb=nb;}
+    if(va<vb)return sortState.dir==='asc'?-1:1;
+    if(va>vb)return sortState.dir==='asc'?1:-1;
+    return 0;
+  });
+}
+
+// ─── SCORE ENGINE ─────────────────────────────────────────────
+const SE_COLS=[
+  {label:'Item ID',   val:r=>r.id,   render:r=>`<td>${r.id}</td>`},
+  {label:'Brand',     val:r=>r.brand,render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Item Name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Status',    val:r=>r.status, render:r=>`<td>${r.status||'—'}</td>`},
+  {label:'ABC',       val:r=>r.catABC, render:r=>`<td>${abcBadge(r.catABC)}</td>`},
+  {label:'Sub ABC',   val:r=>r.subCatABC, render:r=>`<td>${abcBadge(r.subCatABC)}</td>`},
+  {label:'XYZ',       val:r=>r.xyzClass, render:r=>`<td>${xyzBadge(r.xyzClass)}</td>`},
+  {label:'DIO',       val:r=>r.dio, render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+  {label:'ITO',       val:r=>r.ito, render:r=>`<td class="tr num">${$fix(r.ito)}</td>`},
+  {label:'GMROI',     val:r=>r.gmroi, render:r=>`<td class="tr num">${$fix(r.gmroi)}</td>`},
+  {label:'Margin%',   val:r=>r.marginPct, render:r=>`<td class="tr num">${$pct(r.marginPct)}</td>`},
+  {label:'12-Mo Rev', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
+  {label:'OH Cost',   val:r=>r.ohCost, render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
+  {label:'Customers', val:r=>r.numCust, render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
+  {label:'DIO Sc',    val:r=>r.dioSc, render:r=>`<td class="tr num">${r.total!==null?r.dioSc:'—'}</td>`},
+  {label:'ABC Sc',    val:r=>r.abcSc, render:r=>`<td class="tr num">${r.total!==null?r.abcSc:'—'}</td>`},
+  {label:'Velo Sc',   val:r=>r.veloSc, render:r=>`<td class="tr num">${r.total!==null?r.veloSc:'—'}</td>`},
+  {label:'Cust Sc',   val:r=>r.custSc, render:r=>`<td class="tr num">${r.total!==null?r.custSc:'—'}</td>`},
+  {label:'GMROI Sc',  val:r=>r.gmroiSc, render:r=>`<td class="tr num">${r.total!==null?r.gmroiSc:'—'}</td>`},
+  {label:'Score',     val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?r.total:'—'}</td>`},
+  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation)}</td>`},
+];
+function getSERows(){
+  const q=document.getElementById('se-q')?.value.toLowerCase()||'';
+  const recF=document.getElementById('se-rec')?.value||'';
+  const abcF=document.getElementById('se-abc')?.value||'';
+  const xyzF=document.getElementById('se-xyz')?.value||'';
+  const catF=document.getElementById('se-cat')?.value||'';
+  const stF=document.getElementById('se-status')?.value||'';
+  return S.joined.filter(r=>{
+    if(q&&!(r.brand+r.itemName+r.id).toLowerCase().includes(q))return false;
+    if(recF&&r.recommendation!==recF)return false;
+    if(abcF&&r.catABC!==abcF)return false;
+    if(xyzF&&r.xyzClass!==xyzF)return false;
+    if(catF&&r.category!==catF)return false;
+    if(stF&&r.status!==stF)return false;
+    return true;
+  });
+}
+function renderScoreEngine(){
+  if(!S.joined.length)return;
+  const rows=sortRows(getSERows(),SE_COLS,S.sorts.se);
+  makeTable('se-tbl','se-count',SE_COLS,rows,S.sorts.se);
+}
+['se-q','se-rec','se-abc','se-xyz','se-cat','se-status'].forEach(id=>{
+  const el=document.getElementById(id);if(el){el.oninput=el.onchange=()=>{if(S.view==='score-engine')renderScoreEngine();};}
+});
+document.getElementById('se-clear').onclick=()=>{
+  ['se-q','se-rec','se-abc','se-xyz','se-cat','se-status'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(S.view==='score-engine')renderScoreEngine();
+};
+
+// ─── ON HAND ──────────────────────────────────────────────────
+const OH_COLS=[
+  {label:'Item ID',   val:r=>r.id,    render:r=>`<td>${r.id}</td>`},
+  {label:'Item Name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Brand',     val:r=>r.brand, render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Sub Cat',   val:r=>r.subCat,  render:r=>`<td>${r.subCat||'—'}</td>`},
+  {label:'Unit',      val:r=>r.saleUnit, render:r=>`<td>${r.saleUnit||'—'}</td>`},
+  {label:'QOH (ea)',  val:r=>r.qoh,   render:r=>`<td class="tr num">${$int(r.qoh)}</td>`},
+  {label:'30-Day Cons',val:r=>r.cons30,render:r=>`<td class="tr num">${r.cons30?$int(r.cons30):'—'}</td>`},
+  {label:'60-Day Cons',val:r=>r.cons60,render:r=>`<td class="tr num">${r.cons60?$int(r.cons60):'—'}</td>`},
+  {label:'On Order',  val:r=>r.onOrder,render:r=>`<td class="tr num">${r.onOrder?$int(r.onOrder):'—'}</td>`},
+  {label:'Avg Cost',  val:r=>r.avgCostEa,render:r=>`<td class="tr num">${$m2(r.avgCostEa)}</td>`},
+  {label:'OH Cost',   val:r=>r.ohCost, render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
+  {label:'Inv+Pipe',  val:r=>r.invPipe,render:r=>`<td class="tr num">${r.invPipe?$int(r.invPipe):'—'}</td>`},
+  {label:'Total Value',val:r=>r.totalVal,render:r=>`<td class="tr num">${$m(r.totalVal)}</td>`},
+  {label:'DIO',       val:r=>r.dio,   render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+];
+function getOHRows(){
+  const q=document.getElementById('oh-q')?.value.toLowerCase()||'';
+  const catF=document.getElementById('oh-cat')?.value||'';
+  const brandF=document.getElementById('oh-brand')?.value||'';
+  return S.joined.filter(r=>{
+    if(q&&!(r.brand+r.itemName+r.id).toLowerCase().includes(q))return false;
+    if(catF&&r.category!==catF)return false;
+    if(brandF&&r.brand!==brandF)return false;
+    return true;
+  });
+}
+function renderOnHand(){
+  if(!S.joined.length)return;
+  const rows=sortRows(getOHRows(),OH_COLS,S.sorts.oh);
+  makeTable('oh-tbl','oh-count',OH_COLS,rows,S.sorts.oh);
+}
+['oh-q','oh-cat','oh-brand'].forEach(id=>{
+  const el=document.getElementById(id);if(el){el.oninput=el.onchange=()=>{if(S.view==='on-hand')renderOnHand();};}
+});
+document.getElementById('oh-clear').onclick=()=>{
+  ['oh-q','oh-cat','oh-brand'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(S.view==='on-hand')renderOnHand();
+};
+
+// ─── BRAND EVAL ───────────────────────────────────────────────
+const BE_COLS=[
+  {label:'Brand',     val:r=>r.brand,   w:'160px', render:r=>`<td style="min-width:160px;font-weight:600">${r.brand||'—'}</td>`},
+  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'SKUs',      val:r=>r.skus,   render:r=>`<td class="tr num">${r.skus}</td>`},
+  {label:'12-Mo Rev', val:r=>r.rev,    render:r=>`<td class="tr num">${$m(r.rev)}</td>`},
+  {label:'OH Cost',   val:r=>r.cost,   render:r=>`<td class="tr num">${$m(r.cost)}</td>`},
+  {label:'A-Class',   val:r=>r.aClass, render:r=>`<td class="tr num">${r.aClass}</td>`},
+  {label:'B-Class',   val:r=>r.bClass, render:r=>`<td class="tr num">${r.bClass}</td>`},
+  {label:'C-Class',   val:r=>r.cClass, render:r=>`<td class="tr num">${r.cClass}</td>`},
+  {label:'X-Class',   val:r=>r.xClass, render:r=>`<td class="tr num">${r.xClass}</td>`},
+  {label:'Z-Class',   val:r=>r.zClass, render:r=>`<td class="tr num">${r.zClass}</td>`},
+  {label:'Avg DIO',   val:r=>r.avgDIO, render:r=>`<td class="tr num">${$fix(r.avgDIO,0)}</td>`},
+  {label:'Avg Margin',val:r=>r.avgMargin,render:r=>`<td class="tr num">${$pct(r.avgMargin)}</td>`},
+  {label:'Avg GMROI', val:r=>r.avgGMROI,render:r=>`<td class="tr num">${$fix(r.avgGMROI)}</td>`},
+  {label:'Sunset SKUs',val:r=>r.sunsetSkus,render:r=>`<td class="tr num">${r.sunsetSkus}</td>`},
+  {label:'% Sunset',  val:r=>r.pctSunset,render:r=>`<td class="tr num">${$pct(r.pctSunset)}</td>`},
+  {label:'Rev Retention',val:r=>r.revRetPct,render:r=>`<td class="tr num">${$pct(r.revRetPct)}</td>`},
+  {label:'Cust Impacted',val:r=>r.custImpacted,render:r=>`<td class="tr num">${r.custImpacted}</td>`},
+  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation)}</td>`},
+];
+function getBERows(){
+  const q=document.getElementById('be-q')?.value.toLowerCase()||'';
+  const catF=document.getElementById('be-cat')?.value||'';
+  const recF=document.getElementById('be-rec')?.value||'';
+  return S.brandRows.filter(r=>{
+    if(q&&!r.brand.toLowerCase().includes(q))return false;
+    if(catF&&r.category!==catF)return false;
+    if(recF&&r.recommendation!==recF)return false;
+    return true;
+  });
+}
+function renderBrandEval(){
+  if(!S.brandRows.length)return;
+  const rows=sortRows(getBERows(),BE_COLS,S.sorts.be);
+  makeTable('be-tbl','be-count',BE_COLS,rows,S.sorts.be);
+}
+['be-q','be-cat','be-rec'].forEach(id=>{
+  const el=document.getElementById(id);if(el){el.oninput=el.onchange=()=>{if(S.view==='brand-eval')renderBrandEval();};}
+});
+document.getElementById('be-clear').onclick=()=>{
+  ['be-q','be-cat','be-rec'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(S.view==='brand-eval')renderBrandEval();
+};
+
+// ─── SUMMARY ──────────────────────────────────────────────────
+const SUM_COLS=[
+  {label:'Item ID',   val:r=>r.id,    render:r=>`<td>${r.id}</td>`},
+  {label:'Brand',     val:r=>r.brand, render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Item Name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Sub Cat',   val:r=>r.subCat,  render:r=>`<td>${r.subCat||'—'}</td>`},
+  {label:'Status',    val:r=>r.status,  render:r=>`<td>${r.status||'—'}</td>`},
+  {label:'OH Cost',   val:r=>r.ohCost,  render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
+  {label:'12-Mo Rev', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
+  {label:'ABC',       val:r=>r.catABC,  render:r=>`<td>${abcBadge(r.catABC)}</td>`},
+  {label:'Sub ABC',   val:r=>r.subCatABC, render:r=>`<td>${abcBadge(r.subCatABC)}</td>`},
+  {label:'XYZ',       val:r=>r.xyzClass, render:r=>`<td>${xyzBadge(r.xyzClass)}</td>`},
+  {label:'Units Sold',val:r=>r.units12mo, render:r=>`<td class="tr num">${$int(r.units12mo)}</td>`},
+  {label:'Customers', val:r=>r.numCust,  render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
+  {label:'Cust %',    val:r=>r.custPct,  render:r=>`<td class="tr num">${$pct(r.custPct)}</td>`},
+  {label:'Cat Cust%', val:r=>r.custCatPct, render:r=>`<td class="tr num">${$pct(r.custCatPct)}</td>`},
+  {label:'Margin%',   val:r=>r.marginPct, render:r=>`<td class="tr num">${$pct(r.marginPct)}</td>`},
+  {label:'ITO',       val:r=>r.ito,    render:r=>`<td class="tr num">${$fix(r.ito)}</td>`},
+  {label:'DIO',       val:r=>r.dio,    render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+  {label:'GMROI',     val:r=>r.gmroi,  render:r=>`<td class="tr num">${$fix(r.gmroi)}</td>`},
+];
+function getSumRows(){
+  const q=document.getElementById('sum-q')?.value.toLowerCase()||'';
+  const abcF=document.getElementById('sum-abc')?.value||'';
+  const xyzF=document.getElementById('sum-xyz')?.value||'';
+  const catF=document.getElementById('sum-cat')?.value||'';
+  return S.joined.filter(r=>{
+    if(q&&!(r.brand+r.itemName+r.id).toLowerCase().includes(q))return false;
+    if(abcF&&r.catABC!==abcF)return false;
+    if(xyzF&&r.xyzClass!==xyzF)return false;
+    if(catF&&r.category!==catF)return false;
+    return true;
+  });
+}
+function renderSummary(){
+  if(!S.joined.length)return;
+  const rows=sortRows(getSumRows(),SUM_COLS,S.sorts.sum);
+  makeTable('sum-tbl','sum-count',SUM_COLS,rows,S.sorts.sum);
+}
+['sum-q','sum-abc','sum-xyz','sum-cat'].forEach(id=>{
+  const el=document.getElementById(id);if(el){el.oninput=el.onchange=()=>{if(S.view==='summary')renderSummary();};}
+});
+document.getElementById('sum-clear').onclick=()=>{
+  ['sum-q','sum-abc','sum-xyz','sum-cat'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(S.view==='summary')renderSummary();
+};
+
+// ─── EXPORT ──────────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click',()=>{
+  if(!S.wh){alert('Select a warehouse first.');return;}
+  const wb=XLSX.utils.book_new();
+  function addSheet(name,rows){if(!rows.length)return;XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),name);}
+  addSheet('Score Engine',getSERows());
+  addSheet('On Hand',getOHRows());
+  addSheet('Brand Evaluation',getBERows());
+  addSheet('Summary',getSumRows());
+  if(!wb.SheetNames.length){alert('No data to export.');return;}
+  XLSX.writeFile(wb,`Inventory_Health_${S.wh}_${new Date().toISOString().slice(0,10)}.xlsx`);
+});
+
+// ─── INIT ────────────────────────────────────────────────────
+(function init(){
+  S.cfg=loadCfg();
+  if(S.cfg.oh) refresh();
+  else setTimeout(openSettings,300);
+})();
+</script>
+</body>
+</html>
