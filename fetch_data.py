@@ -28,8 +28,12 @@ def csv_to_json(text):
     rows = list(csv.reader(io.StringIO(text)))
     if len(rows) < 2:
         return []
-    # Find densest row in first 10 — handles sheets with multi-row title blocks
-    hi = max(range(min(10, len(rows))), key=lambda i: sum(1 for c in rows[i] if c.strip()))
+    # Find header row: first row within 2 cells of the max density.
+    # This handles title-block sheets (e.g. Stock Ledger has 6 sparse title rows)
+    # without being fooled by data rows that have one extra filled cell vs the header.
+    counts = [sum(1 for c in rows[i] if c.strip()) for i in range(min(10, len(rows)))]
+    threshold = max(counts) - 2
+    hi = next(i for i, c in enumerate(counts) if c >= threshold)
     headers = [h.strip() for h in rows[hi]]
     result = []
     for row in rows[hi + 1:]:
