@@ -1,0 +1,7 @@
+.DS_Store
+*.csv
+.claude/
+christian-dashboard/
+ltw-tracker/
+performance-tracking/
+procurement-dashboard/
