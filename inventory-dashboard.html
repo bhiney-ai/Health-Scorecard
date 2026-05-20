@@ -323,6 +323,31 @@ function parseTotalCust(mktRows) {
   return map;
 }
 
+// ─── ABC ENRICHMENT ──────────────────────────────────────────
+// Compute inventory_classification for warehouses where the source sheet
+// left it blank. Groups by warehouse+category, ranks by revenue descending,
+// then assigns A (≤80% cumulative), B (≤95%), C (>95%).
+function enrichABC(rows) {
+  const groups={};
+  rows.forEach(r=>{
+    if(g(r,'inventory_classification')) return; // already set
+    const key=`${g(r,'Warehouse (Picked) Warehouse Name')}|||${g(r,'Picked Items Category')}`;
+    if(!groups[key]) groups[key]=[];
+    groups[key].push(r);
+  });
+  Object.values(groups).forEach(items=>{
+    items.sort((a,b)=>n(b,'Orders Deliveries and Invoices Invoiced Amount')-n(a,'Orders Deliveries and Invoices Invoiced Amount'));
+    const total=items.reduce((s,r)=>s+n(r,'Orders Deliveries and Invoices Invoiced Amount'),0);
+    if(!total) return;
+    let running=0;
+    items.forEach(r=>{
+      running+=n(r,'Orders Deliveries and Invoices Invoiced Amount');
+      const pct=running/total;
+      r.inventory_classification=pct<=0.8?'A':pct<=0.95?'B':'C';
+    });
+  });
+}
+
 // ─── BUILD LOOKUPS ───────────────────────────────────────────
 function buildLookup(rows, ...idCols) {
   const m={};
@@ -582,6 +607,7 @@ async function refresh(){
   document.getElementById('dash-content').style.display='none';
   try {
     S.raw=await fetchAll();
+    enrichABC(S.raw.abc);
     S.warehouses=detectWH(S.raw);
     S.totalCust=parseTotalCust(S.raw.custMkt);
     localStorage.setItem('inv_dash_warehouses',JSON.stringify(S.warehouses));
