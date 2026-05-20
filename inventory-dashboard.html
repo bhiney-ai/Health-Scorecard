@@ -367,7 +367,8 @@ function buildLookupWH(rows, wh, ...idCols) {
 }
 
 // ─── VELOCITY PERCENTILE ─────────────────────────────────────
-// Matches Excel: COUNTIFS(cat=D2, xyzCol < this_xyz) / COUNTIF(cat=D2)
+// pct = fraction of items in same category that move SLOWER than this item.
+// Higher = faster mover = lower penalty. X (fastest) → near 1.0, Z (slowest) → 0.
 function buildVelPct(xyzRows, wh) {
   const whRows=filterWH(xyzRows,wh);
   const catMap={}; // cat → [xyzClass]
@@ -382,8 +383,9 @@ function buildVelPct(xyzRows, wh) {
   Object.entries(catMap).forEach(([cat,arr])=>{
     const tot=arr.length;
     pct[cat]={};
+    // c > cls counts items with SLOWER velocity (higher letter = slower in XYZ)
     ['X','Y','Z'].forEach(cls=>{
-      pct[cat][cls]=tot>0?arr.filter(c=>c<cls).length/tot:0;
+      pct[cat][cls]=tot>0?arr.filter(c=>c>cls).length/tot:0;
     });
   });
   return pct;
@@ -410,8 +412,8 @@ function scoreVelo(status,velPct,trendNorm){
   else if(velPct<=0.75) base=4;
   else if(velPct<=0.9) base=1;
   else base=0;
-  const t=trendNorm;
-  const trend=t<-0.5?6:t<-0.2?4:t<0.1?2:0;
+  // Only apply trend penalty when trend data is actually present
+  const trend=trendNorm===null?0:trendNorm<-0.5?6:trendNorm<-0.2?4:trendNorm<0.1?0:0;
   return base+trend;
 }
 function scoreCust(status,numC){
@@ -419,8 +421,9 @@ function scoreCust(status,numC){
   if(numC===0) return 15; if(numC<=2) return 12; if(numC<=5) return 9;
   if(numC<=10) return 5; if(numC<=20) return 2; return 0;
 }
-function scoreGMROI(status,gmroi){
+function scoreGMROI(status,gmroi,hasData){
   if(status!=='Active') return 0;
+  if(!hasData) return 0; // missing avgInv/cost = unknown, not penalized
   if(gmroi<0.5) return 10; if(gmroi<1) return 8; if(gmroi<1.5) return 5;
   if(gmroi<2) return 3; if(gmroi<3) return 1; return 0;
 }
@@ -486,8 +489,13 @@ function joinData(raw, wh) {
     // XYZ
     const xyzClass  = (g(xyz,'xyz_classification')||'').toUpperCase();
     const units12mo = n(xyz,'Orders Deliveries and Invoices Invoiced Sales Units','Invoiced Sales Units','total_units');
-    const trendNorm = n(xyz,'trend_norm');
     const coV       = n(xyz,'coefficient_of_variation');
+    // Compute trend from recent vs prior units; null when data absent (no penalty)
+    const recent3   = n(xyz,'recent_3_months_units');
+    const prior9    = n(xyz,'prior_9_months_units');
+    const trendNorm = (recent3||prior9)
+      ? (recent3/3 - prior9/9) / Math.max(prior9/9, 1)
+      : null;
 
     // Customers
     const numCust   = n(cust,'# of Ordering Customers','num_customers');
@@ -503,11 +511,12 @@ function joinData(raw, wh) {
     const endOH  = n(led,'Ending Inv On-hand Value','ending_inv_value');
     const avgInvRaw = n(led,'avg inv','Avg Inv','avg_inv','Average Inventory');
     const avgInv = avgInvRaw || (begOH+endOH)/2;
+    const hasLedger = avgInv>0 && costAmt>0;
 
     // Computed metrics (exact Excel formulas)
     const ito   = avgInv>0 ? costAmt/avgInv : 0;
     const dio   = costAmt>0 ? (avgInv/costAmt)*365 : 0;
-    const gmroi = avgInv>0 ? (netRev-costAmt)/avgInv : 0;
+    const gmroi = hasLedger ? (netRev-costAmt)/avgInv : 0;
 
     // Scoring
     const catVelPct = (velPct[category]||{})[xyzClass] ?? null;
@@ -515,7 +524,7 @@ function joinData(raw, wh) {
     const abcSc   = scoreABC(status,catABC,subCatABC);
     const veloSc  = scoreVelo(status,catVelPct,trendNorm);
     const custSc  = scoreCust(status,numCust);
-    const gmroiSc = scoreGMROI(status,gmroi);
+    const gmroiSc = scoreGMROI(status,gmroi,hasLedger);
     const total   = status==='Active' ? dioSc+abcSc+veloSc+custSc+gmroiSc : null;
     const recommendation = rec(status,total);
 
