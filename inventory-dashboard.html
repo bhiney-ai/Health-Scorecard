@@ -415,6 +415,12 @@ function joinData(raw, wh) {
   const custById = buildLookupWH(raw.custSku, wh, 'Item ID','item_id');
   const mgnById  = buildLookupWH(raw.margin,  wh, 'Item ID','item_id');
   const ledById  = buildLookupWH(raw.ledger, wh, 'Internal ID','Item ID','item_id');
+  // Most ledger rows lack Internal ID — build a name-based fallback lookup
+  const ledByName = {};
+  filterWH(raw.ledger, wh).forEach(r=>{
+    const nm=String(g(r,'Item','item_name')||'').trim().toLowerCase();
+    if(nm) ledByName[nm]=r;
+  });
   const procIds  = new Set(
     raw.proc.filter(r=>g(r,'warehouse_name','Warehouse Name','warehouse').toUpperCase()===wh.toUpperCase())
             .map(r=>String(g(r,'item_id','Item ID')||'').trim())
@@ -424,17 +430,17 @@ function joinData(raw, wh) {
 
   const rows = ohRows.map(item=>{
     const id = String(g(item,'Item ID','item_id')||'').trim();
+    const itemName = g(item,'Item Name');
     const abc  = abcById[id]  || {};
     const xyz  = xyzById[id]  || {};
     const cust = custById[id] || {};
     const mgn  = mgnById[id]  || {};
-    const led  = ledById[id]  || {};
+    const led  = ledById[id]  || ledByName[(itemName||'').trim().toLowerCase()] || {};
 
     const status = procIds.size>0 ? (procIds.has(id)?'Active':'Inactive') : 'Active';
     const category = g(item,'Item Category Name','Category Name','Category');
     const subCat   = g(item,'item subcategory name','Sub Category Name','Sub Category');
     const brand    = g(item,'Catalog Brand','Brand');
-    const itemName = g(item,'Item Name');
     const saleUnit = g(item,'Sale Units Name');
 
     // On Hand metrics
