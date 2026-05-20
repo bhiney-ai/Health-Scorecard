@@ -286,7 +286,8 @@ async function fetchAll() {
 
 // ─── COLUMN HELPERS ──────────────────────────────────────────
 function g(row,...keys){for(const k of keys){if(row&&row[k]!==undefined&&row[k]!==null&&row[k]!=='')return row[k];}return '';}
-function n(row,...keys){return parseFloat(g(row,...keys))||0;}
+function n(row,...keys){return parseFloat(String(g(row,...keys)).replace(/[$,]/g,''))||0;}
+function nPct(row,...keys){const v=String(g(row,...keys));return v.includes('%')?parseFloat(v)/100:parseFloat(v.replace(/[$,]/g,''))||0;}
 
 // ─── WAREHOUSE DETECTION ─────────────────────────────────────
 const WH_COLS=['Warehouse Name','warehouse_name','Warehouse','warehouse','Warehouse (Picked) Warehouse Name','Location','location'];
@@ -447,7 +448,7 @@ function joinData(raw, wh) {
     const totalVal = n(item,'Total Value');
 
     // ABC
-    const rev12mo   = n(abc,'Invoiced Amount','invoiced_amount');
+    const rev12mo   = n(abc,'Orders Deliveries and Invoices Invoiced Amount','Invoiced Amount','invoiced_amount');
     const catABC    = (g(abc,'inventory_classification')||'').toUpperCase();
     const subCatABC = (g(abc,'sub_category_classification','Sub Category Classification','subcat_classification')||catABC).toUpperCase();
 
@@ -464,7 +465,7 @@ function joinData(raw, wh) {
     // Customer Margin
     const netRev    = n(mgn,'net revenue','Net Revenue');
     const costAmt   = n(mgn,'Cost Amount','cost_amount');
-    const marginPct = n(mgn,'Margin %','margin_pct','Margin');
+    const marginPct = nPct(mgn,'Margin %','margin_pct','Margin');
 
     // Stock Ledger → avg inv
     const begOH  = n(led,'Beginning Inv On-hand Value','beginning_inv_value');
