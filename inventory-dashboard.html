@@ -708,20 +708,24 @@ function renderDashboard(){
   document.getElementById('abc-dist').innerHTML=`<thead><tr><th>Class</th><th class="tr">SKUs</th><th class="tr">OH Cost</th><th class="tr">12-Mo Rev</th><th class="tr">Rev %</th><th class="tr">Avg GMROI</th></tr></thead><tbody>`+
     ['A','B','C'].map(cls=>{const d=abcDist[cls];return `<tr><td>${abcBadge(cls)}</td><td class="tr num">${d.skus}</td><td class="tr num">${$m(d.cost)}</td><td class="tr num">${$m(d.rev)}</td><td class="tr num">${$pct(totalRev?d.rev/totalRev:0)}</td><td class="tr num">${$fix(avg(d.gmroi))}</td></tr>`;}).join('')+'</tbody>';
 
-  // Category performance
+  // Category performance — aggregate components first, then derive ratios
   const catMap2={};
   J.forEach(r=>{
-    if(!catMap2[r.category])catMap2[r.category]={skus:0,rev:0,cost:0,ito:[],dio:[],gmroi:[],keep:0,watch:0,sunset:0};
+    if(!catMap2[r.category])catMap2[r.category]={skus:0,rev:0,cost:0,sumAvgInv:0,sumCostAmt:0,sumNetRev:0,keep:0,watch:0,sunset:0};
     const d=catMap2[r.category];d.skus++;d.rev+=r.rev12mo;d.cost+=r.ohCost;
-    if(r.ito)d.ito.push(r.ito);if(r.dio>0&&r.dio<99999)d.dio.push(r.dio);if(r.gmroi)d.gmroi.push(r.gmroi);
+    d.sumAvgInv+=r.avgInv;d.sumCostAmt+=r.costAmt;d.sumNetRev+=r.netRev;
     if(r.recommendation==='KEEP')d.keep++;else if(r.recommendation==='WATCH')d.watch++;else if(r.recommendation==='SUNSET')d.sunset++;
   });
-  const catRows=Object.entries(catMap2).sort((a,b)=>b[1].rev-a[1].rev).map(([cat,d])=>`<tr>
+  const catRows=Object.entries(catMap2).sort((a,b)=>b[1].rev-a[1].rev).map(([cat,d])=>{
+    const catITO   = d.sumAvgInv>0 ? d.sumCostAmt/d.sumAvgInv : 0;
+    const catDIO   = d.sumCostAmt>0 ? (d.sumAvgInv/d.sumCostAmt)*365 : 0;
+    const catGMROI = d.sumAvgInv>0 ? (d.sumNetRev-d.sumCostAmt)/d.sumAvgInv : 0;
+    return `<tr>
     <td>${cat}</td><td class="tr num">${d.skus}</td><td class="tr num">${$m(d.rev)}</td><td class="tr num">${$m(d.cost)}</td>
-    <td class="tr num">${$fix(avg(d.ito))}</td><td class="tr num">${$fix(avg(d.dio),0)}</td><td class="tr num">${$fix(avg(d.gmroi))}</td>
+    <td class="tr num">${catITO>0?$fix(catITO):'—'}</td><td class="tr num">${catDIO>0?$fix(catDIO,0):'—'}</td><td class="tr num">${catGMROI?$fix(catGMROI):'—'}</td>
     <td class="tr"><span class="rec rk">${d.keep}</span> <span class="rec rw">${d.watch}</span> <span class="rec rs">${d.sunset}</span></td>
-  </tr>`).join('');
-  document.getElementById('cat-tbl').innerHTML=`<thead><tr><th>Category</th><th class="tr">SKUs</th><th class="tr">Revenue</th><th class="tr">OH Cost</th><th class="tr">Avg ITO</th><th class="tr">Avg DIO</th><th class="tr">Avg GMROI</th><th class="tr">K/W/S</th></tr></thead><tbody>${catRows}</tbody>`;
+  </tr>`;}).join('');
+  document.getElementById('cat-tbl').innerHTML=`<thead><tr><th>Category</th><th class="tr">SKUs</th><th class="tr">Revenue</th><th class="tr">OH Cost</th><th class="tr">ITO</th><th class="tr">DIO</th><th class="tr">GMROI</th><th class="tr">K/W/S</th></tr></thead><tbody>${catRows}</tbody>`;
 }
 function destroyChart(id){if(S.charts[id]){S.charts[id].destroy();delete S.charts[id];}}
 
