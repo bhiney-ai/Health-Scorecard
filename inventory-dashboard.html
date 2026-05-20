@@ -506,17 +506,28 @@ function joinData(raw, wh) {
     const costAmt   = n(mgn,'Cost Amount','cost_amount');
     const marginPct = nPct(mgn,'Margin %','margin_pct','Margin');
 
-    // Stock Ledger → avg inv
+    // Stock Ledger → avg inv + period COGS
     const begOH  = n(led,'Beginning Inv On-hand Value','beginning_inv_value');
     const endOH  = n(led,'Ending Inv On-hand Value','ending_inv_value');
     const avgInvRaw = n(led,'avg inv','Avg Inv','avg_inv','Average Inventory');
     const avgInv = avgInvRaw || (begOH+endOH)/2;
-    const hasLedger = avgInv>0 && costAmt>0;
+    // Value of Outputs = April COGS (30-day period, same window as avgInv)
+    const vop = n(led,'Value of Outputs','value_of_outputs');
+    const hasLedger = avgInv>0;
 
-    // Computed metrics (exact Excel formulas)
-    const ito   = avgInv>0 ? costAmt/avgInv : 0;
-    const dio   = costAmt>0 ? (avgInv/costAmt)*365 : 0;
-    const gmroi = hasLedger ? (netRev-costAmt)/avgInv : 0;
+    // DIO: use ledger VOP (same period as avgInv) for accuracy.
+    // Fallback to margin Cost Amount with ~6-month period adjustment.
+    // Items with inventory but zero outputs = dead stock → cap at 9999.
+    let dio = 0;
+    if(avgInv>0){
+      if(vop>0)        dio = avgInv*30/vop;           // ledger: 30-day April period
+      else if(costAmt>0) dio = avgInv*180/costAmt;    // margin fallback: ~6-month period
+      else               dio = 9999;                  // stock on hand, no sales signal
+    }
+
+    // ITO and GMROI — annualize VOP-based metrics where possible
+    const ito   = avgInv>0 ? (vop>0 ? (vop*12)/avgInv : costAmt>0 ? (costAmt*2)/avgInv : 0) : 0;
+    const gmroi = hasLedger && costAmt>0 ? (netRev-costAmt)/avgInv : 0;
 
     // Scoring
     const catVelPct = (velPct[category]||{})[xyzClass] ?? null;
