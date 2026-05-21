@@ -59,7 +59,7 @@ table.dt tr:last-child td{border-bottom:none}
 .fbar input,.fbar select{padding:5px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;background:#fff;color:#1e293b;height:29px}
 .fbar input{min-width:170px}
 .rec{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-.rk{background:#dcfce7;color:#16a34a}.rw{background:#fef9c3;color:#92400e}.rs{background:#fee2e2;color:#dc2626}
+.rk{background:#dcfce7;color:#16a34a}.rw{background:#fef9c3;color:#92400e}.rs{background:#fee2e2;color:#dc2626}.rntm{background:#ede9fe;color:#5b21b6}
 .aa{background:#dbeafe;color:#1e40af;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
 .ab{background:#e0e7ff;color:#3730a3;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
 .ac{background:#f3f4f6;color:#374151;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
@@ -273,7 +273,7 @@ function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
 
 // ─── FETCH (local JSON files written by GitHub Action) ────────
 async function fetchAll() {
-  const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'];
+  const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc','daysAct'];
   // No cache:'no-cache' — let browser cache serve repeat visits via ETags
   const results=await Promise.allSettled(keys.map(k=>fetch(`data/${k}.json`).then(r=>{if(!r.ok)throw new Error(`${k}: HTTP ${r.status}`);return r.json();})));
   const out={};const errs=[];
@@ -289,7 +289,7 @@ async function fetchAll() {
 // joinData then does O(1) lookups instead of rescanning all rows per switch.
 function groupByWH(raw) {
   const grp={};
-  const keys=['oh','abc','xyz','custSku','margin','ledger','proc'];
+  const keys=['oh','abc','xyz','custSku','margin','ledger','proc','daysAct'];
   keys.forEach(key=>{
     (raw[key]||[]).forEach(r=>{
       const wh=getWH(r);
@@ -474,6 +474,7 @@ function joinData(raw, wh) {
   const procIds = new Set(procRows
     .filter(r=>String(r.in_catalog||'').toUpperCase()!=='FALSE')
     .map(r=>String(g(r,'item_id','Item ID')||'').trim()));
+  const daById = buildLookup(g2.daysAct||[], 'Item ID','item_id');
   const totalCustWH = S.totalCust[wh] || 1;
   const velPct = buildVelPct(g2.xyz||[], null); // already WH-filtered
 
@@ -486,7 +487,10 @@ function joinData(raw, wh) {
     const mgn  = mgnById[id]  || {};
     const led  = ledById[id]  || ledByName[(itemName||'').trim().toLowerCase()] || {};
 
-    const status = procIds.size>0 ? (procIds.has(id)?'Active':'Inactive') : 'Active';
+    const da = daById[id] || {};
+    const daysActive = n(da,'days Active','daysActive');
+    const _baseStatus = procIds.size>0 ? (procIds.has(id)?'Active':'Inactive') : 'Active';
+    const status = (_baseStatus==='Active' && daysActive>0 && daysActive<90) ? 'New To Market' : _baseStatus;
     const category = g(item,'Item Category Name','Category Name','Category');
     const subCat   = g(item,'item subcategory name','Sub Category Name','Sub Category');
     const brand    = g(item,'Catalog Brand','Brand');
@@ -568,7 +572,7 @@ function joinData(raw, wh) {
     const total   = status==='Active' ? dioSc+abcSc+veloSc+custSc+gmroiSc : null;
     const recommendation = rec(status,total);
 
-    return {id,brand,itemName,category,subCat,saleUnit,status,wh,
+    return {id,brand,itemName,category,subCat,saleUnit,status,daysActive,wh,
       qoh,cons30,cons60,onOrder,avgCostEa,ohCost,invPipe,totalVal,
       rev12mo,catABC,subCatABC,xyzClass,units12mo,trendNorm,coV,
       numCust,custPct,netRev,costAmt,marginPct,avgInv,ito,dio,gmroi,
@@ -617,7 +621,8 @@ function $fix(v,d=2){return isNaN(v)||v===null?'—':Number(v).toFixed(d);}
 function $int(v){return isNaN(v)?'—':Math.round(Number(v)).toLocaleString();}
 function abcBadge(v){const cls={A:'aa',B:'ab',C:'ac'}[v]||'ac';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
 function xyzBadge(v){const cls={X:'xx',Y:'xy',Z:'xz'}[v]||'xz';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
-function recBadge(v){if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP'?'rk':v==='WATCH'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
+function recBadge(v,status){if(status==='New To Market')return `<span class="rec rntm">NEW</span>`;if(status==='Inactive')return '<span class="muted">—</span>';if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP'?'rk':v==='WATCH'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
+function statusBadge(s){if(s==='New To Market')return `<span class="rec rntm">New To Market</span>`;return s||'—';}
 
 // ─── NAV ─────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(el=>{
@@ -853,7 +858,8 @@ const SE_COLS=[
   {label:'Brand',     val:r=>r.brand,render:r=>`<td>${r.brand||'—'}</td>`},
   {label:'Item Name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
   {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
-  {label:'Status',    val:r=>r.status, render:r=>`<td>${r.status||'—'}</td>`},
+  {label:'Status',    val:r=>r.status, render:r=>`<td>${statusBadge(r.status)}</td>`},
+  {label:'Days Active',val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):'—'}</td>`},
   {label:'ABC',       val:r=>r.catABC, render:r=>`<td>${abcBadge(r.catABC)}</td>`},
   {label:'Sub ABC',   val:r=>r.subCatABC, render:r=>`<td>${abcBadge(r.subCatABC)}</td>`},
   {label:'XYZ',       val:r=>r.xyzClass, render:r=>`<td>${xyzBadge(r.xyzClass)}</td>`},
@@ -870,7 +876,7 @@ const SE_COLS=[
   {label:'Cust Sc',   val:r=>r.custSc, render:r=>`<td class="tr num">${r.total!==null?r.custSc:'—'}</td>`},
   {label:'GMROI Sc',  val:r=>r.gmroiSc, render:r=>`<td class="tr num">${r.total!==null?r.gmroiSc:'—'}</td>`},
   {label:'Score',     val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?r.total:'—'}</td>`},
-  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation)}</td>`},
+  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}</td>`},
 ];
 function getSERows(){
   const q=document.getElementById('se-q')?.value.toLowerCase()||'';
@@ -919,6 +925,7 @@ const OH_COLS=[
   {label:'Inv+Pipe',  val:r=>r.invPipe,render:r=>`<td class="tr num">${r.invPipe?$int(r.invPipe):'—'}</td>`},
   {label:'Total Value',val:r=>r.totalVal,render:r=>`<td class="tr num">${$m(r.totalVal)}</td>`},
   {label:'DIO',       val:r=>r.dio,   render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+  {label:'Days Active',val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):r.status==='New To Market'?'<span class="rec rntm">NEW</span>':'—'}</td>`},
 ];
 function getOHRows(){
   const q=document.getElementById('oh-q')?.value.toLowerCase()||'';
@@ -963,7 +970,7 @@ const BE_COLS=[
   {label:'% Sunset',  val:r=>r.pctSunset,render:r=>`<td class="tr num">${$pct(r.pctSunset)}</td>`},
   {label:'Rev Retention',val:r=>r.revRetPct,render:r=>`<td class="tr num">${$pct(r.revRetPct)}</td>`},
   {label:'Cust Impacted',val:r=>r.custImpacted,render:r=>`<td class="tr num">${r.custImpacted}</td>`},
-  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation)}</td>`},
+  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}</td>`},
 ];
 function getBERows(){
   const q=document.getElementById('be-q')?.value.toLowerCase()||'';

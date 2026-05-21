@@ -16,6 +16,7 @@ SHEETS = {
     'margin':  ('12QS8Kva_512I_oDS-gNle7dCpgCJzntiOIcpOttWaOo', '0'),
     'ledger':  ('13Yp1zREpOFCAkEIajli5lgWdwZAZLsi7e25yod6X_tc', '1033018785'),
     'proc':    ('1sPEc5rBdRB9qaJijBh4z8DK4ZVo--5xmTGbPTZ5n2nQ', '1794766977'),
+    'daysAct': ('1dPHBFHQt_nZG3c-SLCinqbuGPCSVTwiz01hiwadvuKo', '0'),
 }
 
 # Only keep columns the dashboard actually uses.
@@ -40,6 +41,7 @@ KEEP_COLS = {
                 'Beginning Inv On-hand Value', 'Ending Inv On-hand Value',
                 'Value of Outputs'},
     'proc':    {'warehouse_name', 'item_id', 'in_catalog'},
+    'daysAct': {'Item ID', 'Warehouse Name', 'days Active'},
 }
 
 def fetch_sheet(sheet_id, gid):
