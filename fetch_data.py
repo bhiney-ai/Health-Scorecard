@@ -18,19 +18,40 @@ SHEETS = {
     'proc':    ('1sPEc5rBdRB9qaJijBh4z8DK4ZVo--5xmTGbPTZ5n2nQ', '1794766977'),
 }
 
+# Only keep columns the dashboard actually uses.
+# None → keep all columns.
+KEEP_COLS = {
+    'oh':      None,  # already lean
+    'abc':     {'Netsuite Items Item ID', 'Warehouse (Picked) Warehouse Name',
+                'Ordered Items Catalog Brand', 'Ordered Items Item Name',
+                'Picked Items Category', 'Picked Items Sub-Category',
+                'Orders Deliveries and Invoices Invoiced Amount',
+                'inventory_classification'},
+    'xyz':     {'Netsuite Items Item ID', 'Warehouse (Picked) Warehouse Name',
+                'Picked Items Category', 'Ordered Items Item Name',
+                'Ordered Items Catalog Brand',
+                'xyz_classification', 'coefficient_of_variation',
+                'recent_3_months_units', 'prior_9_months_units',
+                'Orders Deliveries and Invoices Invoiced Sales Units'},
+    'custSku': None,
+    'custMkt': None,
+    'margin':  None,
+    'ledger':  {'Internal ID', 'Item', 'Location',
+                'Beginning Inv On-hand Value', 'Ending Inv On-hand Value',
+                'Value of Outputs'},
+    'proc':    {'warehouse_name', 'item_id', 'in_catalog'},
+}
+
 def fetch_sheet(sheet_id, gid):
     url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}'
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=60, context=SSL_CTX) as r:
         return r.read().decode('utf-8')
 
-def csv_to_json(text):
+def csv_to_json(text, keep=None):
     rows = list(csv.reader(io.StringIO(text)))
     if len(rows) < 2:
         return []
-    # Find header row: first row within 2 cells of the max density.
-    # This handles title-block sheets (e.g. Stock Ledger has 6 sparse title rows)
-    # without being fooled by data rows that have one extra filled cell vs the header.
     counts = [sum(1 for c in rows[i] if c.strip()) for i in range(min(10, len(rows)))]
     threshold = max(counts) - 2
     hi = next(i for i, c in enumerate(counts) if c >= threshold)
@@ -39,7 +60,7 @@ def csv_to_json(text):
     for row in rows[hi + 1:]:
         obj = {}
         for i, h in enumerate(headers):
-            if h:
+            if h and (keep is None or h in keep):
                 obj[h] = row[i].strip() if i < len(row) else ''
         if any(v for v in obj.values()):
             result.append(obj)
@@ -50,7 +71,7 @@ for key, (sid, gid) in SHEETS.items():
     try:
         print(f'Fetching {key}...', flush=True)
         text = fetch_sheet(sid, gid)
-        rows = csv_to_json(text)
+        rows = csv_to_json(text, keep=KEEP_COLS[key])
         with open(f'data/{key}.json', 'w') as f:
             json.dump(rows, f, separators=(',', ':'))
         print(f'  → {len(rows)} rows', flush=True)

@@ -274,7 +274,8 @@ function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
 // ─── FETCH (local JSON files written by GitHub Action) ────────
 async function fetchAll() {
   const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc'];
-  const results=await Promise.allSettled(keys.map(k=>fetch(`data/${k}.json`,{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error(`${k}: HTTP ${r.status}`);return r.json();})));
+  // No cache:'no-cache' — let browser cache serve repeat visits via ETags
+  const results=await Promise.allSettled(keys.map(k=>fetch(`data/${k}.json`).then(r=>{if(!r.ok)throw new Error(`${k}: HTTP ${r.status}`);return r.json();})));
   const out={};const errs=[];
   keys.forEach((k,i)=>{
     if(results[i].status==='fulfilled'){out[k]=results[i].value;}
@@ -282,6 +283,24 @@ async function fetchAll() {
   });
   if(errs.length) console.warn('Some sources failed:',errs);
   return out;
+}
+
+// Pre-group all rows by warehouse once at load time.
+// joinData then does O(1) lookups instead of rescanning all rows per switch.
+function groupByWH(raw) {
+  const grp={};
+  const keys=['oh','abc','xyz','custSku','margin','ledger','proc'];
+  keys.forEach(key=>{
+    (raw[key]||[]).forEach(r=>{
+      const wh=getWH(r);
+      if(!wh) return;
+      if(!grp[wh]) grp[wh]={};
+      if(!grp[wh][key]) grp[wh][key]=[];
+      grp[wh][key].push(r);
+    });
+  });
+  // custMkt kept separate — multi-month, parsed differently
+  return grp;
 }
 
 // ─── COLUMN HELPERS ──────────────────────────────────────────
@@ -300,26 +319,26 @@ function detectWH(raw){
 function filterWH(rows,wh){return rows.filter(r=>getWH(r)===wh);}
 
 // ─── TOTAL CUSTOMERS (market level) ──────────────────────────
+// Uses the latest month's unique customer count per warehouse.
 function parseTotalCust(mktRows) {
-  const map={};
-  // Format 1: rows with warehouse + customer count column
-  const custCols=['# Active Customers','Total Active Customers','Active Customers','# of Active Customers','total_customers','# Customers'];
+  const custCols=['# of Ordering Customers','# Active Customers','Total Active Customers',
+                  'Active Customers','# of Active Customers','total_customers','# Customers'];
+  // Collect latest month per warehouse
+  const latest={};   // wh → {month, count}
   mktRows.forEach(r=>{
     const wh=getWH(r);
     if(!wh) return;
+    const mo=r['Date Month']||'';
     for(const c of custCols){
-      const v=parseFloat(r[c]);
-      if(!isNaN(v)&&v>0){map[wh]=(map[wh]||0)+v;return;}
+      const v=parseFloat(String(r[c]||'').replace(/,/g,''));
+      if(!isNaN(v)&&v>0){
+        if(!latest[wh]||mo>latest[wh].month) latest[wh]={month:mo,count:v};
+        return;
+      }
     }
   });
-  // Format 2: single-column numeric rows (just a number)
-  if(Object.keys(map).length===0&&mktRows.length>0){
-    const numericRows=mktRows.filter(r=>{const vals=Object.values(r);return vals.length<=3&&vals.some(v=>!isNaN(parseFloat(v))&&parseFloat(v)>0);});
-    numericRows.forEach(r=>{
-      const wh=getWH(r)||'default';
-      Object.values(r).forEach(v=>{const num=parseFloat(v);if(!isNaN(num)&&num>0)map[wh]=num;});
-    });
-  }
+  const map={};
+  Object.entries(latest).forEach(([wh,d])=>{ map[wh]=d.count; });
   return map;
 }
 
@@ -370,7 +389,7 @@ function buildLookupWH(rows, wh, ...idCols) {
 // pct = fraction of items in same category that move SLOWER than this item.
 // Higher = faster mover = lower penalty. X (fastest) → near 1.0, Z (slowest) → 0.
 function buildVelPct(xyzRows, wh) {
-  const whRows=filterWH(xyzRows,wh);
+  const whRows=wh?filterWH(xyzRows,wh):xyzRows;
   const catMap={}; // cat → [xyzClass]
   whRows.forEach(r=>{
     const cat=g(r,'Picked Items Category','Category','category');
@@ -434,27 +453,29 @@ function rec(status,total){
 
 // ─── JOIN DATA ───────────────────────────────────────────────
 function joinData(raw, wh) {
-  const ohRows = filterWH(raw.oh, wh);
+  // Use pre-grouped data (O(1) per warehouse) instead of filtering all rows
+  const g2 = S.grp[wh] || {};
+  const ohRows = g2.oh || [];
   if(!ohRows.length) return [];
 
-  // Lookups — ledger and proc not warehouse-filtered (may not have WH column)
-  const abcById  = buildLookupWH(raw.abc,  wh, 'Netsuite Items Item ID','Item ID','item_id');
-  const xyzById  = buildLookupWH(raw.xyz,  wh, 'Netsuite Items Item ID','Item ID','item_id');
-  const custById = buildLookupWH(raw.custSku, wh, 'Item ID','item_id');
-  const mgnById  = buildLookupWH(raw.margin,  wh, 'Item ID','item_id');
-  const ledById  = buildLookupWH(raw.ledger, wh, 'Internal ID','Item ID','item_id');
-  // Most ledger rows lack Internal ID — build a name-based fallback lookup
+  const abcById  = buildLookup(g2.abc  ||[], 'Netsuite Items Item ID','Item ID','item_id');
+  const xyzById  = buildLookup(g2.xyz  ||[], 'Netsuite Items Item ID','Item ID','item_id');
+  const custById = buildLookup(g2.custSku||[], 'Item ID','item_id');
+  const mgnById  = buildLookup(g2.margin ||[], 'Item ID','item_id');
+  const ledById  = buildLookup(g2.ledger ||[], 'Internal ID');
+  // Name-based ledger fallback (most rows lack Internal ID)
   const ledByName = {};
-  filterWH(raw.ledger, wh).forEach(r=>{
+  (g2.ledger||[]).forEach(r=>{
     const nm=String(g(r,'Item','item_name')||'').trim().toLowerCase();
     if(nm) ledByName[nm]=r;
   });
-  const procIds  = new Set(
-    raw.proc.filter(r=>g(r,'warehouse_name','Warehouse Name','warehouse').toUpperCase()===wh.toUpperCase())
-            .map(r=>String(g(r,'item_id','Item ID')||'').trim())
-  );
+  // Active = in proc AND in_catalog not false
+  const procRows = g2.proc||[];
+  const procIds = new Set(procRows
+    .filter(r=>String(r.in_catalog||'').toUpperCase()!=='FALSE')
+    .map(r=>String(g(r,'item_id','Item ID')||'').trim()));
   const totalCustWH = S.totalCust[wh] || 1;
-  const velPct = buildVelPct(raw.xyz, wh);
+  const velPct = buildVelPct(g2.xyz||[], null); // already WH-filtered
 
   const rows = ohRows.map(item=>{
     const id = String(g(item,'Item ID','item_id')||'').trim();
@@ -471,15 +492,23 @@ function joinData(raw, wh) {
     const brand    = g(item,'Catalog Brand','Brand');
     const saleUnit = g(item,'Sale Units Name');
 
-    // On Hand metrics
-    const qoh      = n(item,'quantity on hand eaches','Quantity On Hand');
-    const cons30   = n(item,'Consumption 30 Days');
-    const cons60   = n(item,'Consumption 60 Days');
-    const onOrder  = n(item,'Quantity on Order Each');
+    // On Hand metrics — raw eaches values
+    const convRate  = Math.max(n(item,'Sales Unit Conversion Rate'),1);
+    const qohEa    = n(item,'quantity on hand eaches','Quantity On Hand');
+    const cons30Ea = n(item,'Consumption 30 Days');
+    const cons60Ea = n(item,'Consumption 60 Days');
+    const onOrderEa= n(item,'Quantity on Order Each');
     const avgCostEa= n(item,'Average Cost Dollars Eaches','Average Cost');
-    const ohCost   = n(item,'Total On Hand Cost');
-    const invPipe  = n(item,'Inv Pipe');
-    const totalVal = n(item,'Total Value');
+    // Convert to purchase units
+    const qoh      = qohEa    / convRate;
+    const cons30   = cons30Ea / convRate;
+    const cons60   = cons60Ea / convRate;
+    const onOrder  = onOrderEa/ convRate;
+    const avgCostPu= avgCostEa * convRate;
+    const ohCost   = n(item,'Total On Hand Cost') || qohEa * avgCostEa;
+    // Inv Pipe and Total Value computed (not a column in source data)
+    const invPipe  = qoh + onOrder;
+    const totalVal = invPipe * avgCostPu;
 
     // ABC
     const rev12mo   = n(abc,'Orders Deliveries and Invoices Invoiced Amount','Invoiced Amount','invoiced_amount');
@@ -628,6 +657,7 @@ async function refresh(){
   try {
     S.raw=await fetchAll();
     enrichABC(S.raw.abc);
+    S.grp=groupByWH(S.raw);
     S.warehouses=detectWH(S.raw);
     S.totalCust=parseTotalCust(S.raw.custMkt);
     localStorage.setItem('inv_dash_warehouses',JSON.stringify(S.warehouses));
