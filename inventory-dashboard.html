@@ -588,13 +588,13 @@ function buildBrands(joined){
   const map={};
   joined.forEach(r=>{
     const key=r.brand+'|||'+r.category;
-    if(!map[key]) map[key]={brand:r.brand,category:r.category,skus:0,rev:0,cost:0,aClass:0,bClass:0,cClass:0,xClass:0,zClass:0,dioArr:[],marginArr:[],gmroiArr:[],sunsetSkus:0,sunsetCust:0,sunsetRev:0};
+    if(!map[key]) map[key]={brand:r.brand,category:r.category,skus:0,rev:0,cost:0,aClass:0,bClass:0,cClass:0,xClass:0,zClass:0,dioArr:[],sumNetRev:0,sumCostAmt:0,gmroiArr:[],sunsetSkus:0,sunsetCust:0,sunsetRev:0};
     const d=map[key];
     d.skus++;d.rev+=r.rev12mo;d.cost+=r.ohCost;
     if(r.catABC==='A')d.aClass++;else if(r.catABC==='B')d.bClass++;else if(r.catABC==='C')d.cClass++;
     if(r.xyzClass==='X')d.xClass++;else if(r.xyzClass==='Z')d.zClass++;
     if(r.dio>0&&r.dio<99999)d.dioArr.push(r.dio);
-    if(r.marginPct!==0)d.marginArr.push(r.marginPct);
+    if(r.netRev>0){d.sumNetRev+=r.netRev;d.sumCostAmt+=r.costAmt;}
     if(r.gmroi!==0)d.gmroiArr.push(r.gmroi);
     if(r.recommendation==='SUNSET'){d.sunsetSkus++;d.sunsetCust+=r.numCust;d.sunsetRev+=r.rev12mo;}
   });
@@ -604,7 +604,8 @@ function buildBrands(joined){
     const revRetention=d.rev-d.sunsetRev;
     const revRetPct=d.rev>0?revRetention/d.rev:0;
     const brandRec=pctSunset===1?'EXIT BRAND':pctSunset>0?'TRIM':'KEEP';
-    return {...d,avgDIO:avg(d.dioArr),avgMargin:avg(d.marginArr),avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
+    const blendedMargin=d.sumNetRev>0?(d.sumNetRev-d.sumCostAmt)/d.sumNetRev:0;
+    return {...d,avgDIO:avg(d.dioArr),blendedMargin,avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
   }).sort((a,b)=>b.rev-a.rev);
 }
 
@@ -956,7 +957,7 @@ const BE_COLS=[
   {label:'X-Class',   val:r=>r.xClass, render:r=>`<td class="tr num">${r.xClass}</td>`},
   {label:'Z-Class',   val:r=>r.zClass, render:r=>`<td class="tr num">${r.zClass}</td>`},
   {label:'Avg DIO',   val:r=>r.avgDIO, render:r=>`<td class="tr num">${$fix(r.avgDIO,0)}</td>`},
-  {label:'Avg Margin',val:r=>r.avgMargin,render:r=>`<td class="tr num">${$pct(r.avgMargin)}</td>`},
+  {label:'Margin%',val:r=>r.blendedMargin,render:r=>`<td class="tr num">${$pct(r.blendedMargin)}</td>`},
   {label:'Avg GMROI', val:r=>r.avgGMROI,render:r=>`<td class="tr num">${$fix(r.avgGMROI)}</td>`},
   {label:'Sunset SKUs',val:r=>r.sunsetSkus,render:r=>`<td class="tr num">${r.sunsetSkus}</td>`},
   {label:'% Sunset',  val:r=>r.pctSunset,render:r=>`<td class="tr num">${$pct(r.pctSunset)}</td>`},
