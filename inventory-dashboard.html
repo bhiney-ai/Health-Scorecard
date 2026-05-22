@@ -552,9 +552,9 @@ function joinData(raw, wh) {
     // Dead stock (avgInv > 0, no COGS anywhere) → 9999.
     let dio = 0;
     if(avgInv>0){
-      if(costAmt>0)    dio = avgInv*182/costAmt;      // margin: stable 6-month trailing COGS
-      else if(vop>0)   dio = avgInv*30/vop;           // VOP fallback: items with no margin data
-      else             dio = 9999;                    // stock on hand, no sales signal
+      if(costAmt>0)    dio = Math.min(avgInv*182/costAmt, 9999); // margin: 6-month COGS; cap dead-slow
+      else if(vop>0)   dio = Math.min(avgInv*30/vop,     9999); // VOP fallback
+      else             dio = 9999;                               // no sales signal
     }
 
     // ITO and GMROI — costAmt primary (stable 6-mo), VOP fallback
