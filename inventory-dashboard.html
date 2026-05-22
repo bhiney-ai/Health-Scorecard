@@ -215,7 +215,7 @@ table.dt tr:last-child td{border-bottom:none}
         <div class="fbar">
           <input type="text" id="be-q" placeholder="Search brand…">
           <select id="be-cat"><option value="">All Categories</option></select>
-          <select id="be-rec"><option value="">All Recommendations</option><option>KEEP</option><option>TRIM</option><option>EXIT BRAND</option></select>
+          <select id="be-rec"><option value="">All Recommendations</option><option>KEEP — Strategic</option><option>MONITOR</option><option>MOQ REVIEW</option><option>TRIM TAIL</option><option>EXIT BRAND</option></select>
           <button class="btn btn-ghost" id="be-clear">Clear</button>
           <span class="tbl-count" id="be-count"></span>
         </div>
@@ -416,24 +416,21 @@ function scoreDIO(status,dio){
   if(dio>365) return 30; if(dio>180) return 25; if(dio>90) return 18;
   if(dio>60) return 10; if(dio>30) return 5; return 0;
 }
-function scoreABC(status,catABC,subABC){
+function scoreABC(status,catABC){
+  // Reference: category-level ABC only. C=25, B=10, A=0.
   if(status!=='Active') return 0;
-  const s=c=>c==='C'?25:c==='B'?10:0;
-  return (s(catABC)+s(subABC))/2;
+  if(catABC==='C') return 25; if(catABC==='B') return 10; return 0;
 }
-function scoreVelo(status,velPct,trendNorm){
+function scoreVelo(status,velRaw){
+  // Reference: ratio of recent 3-mo avg / prior 9-mo avg.
+  // 0 = no sales (worst), >20 = explosive growth (best).
   if(status!=='Active') return 0;
-  let base;
-  if(velPct===null||velPct===undefined) base=20;
-  else if(velPct<=0.1) base=14;
-  else if(velPct<=0.25) base=11;
-  else if(velPct<=0.5) base=8;
-  else if(velPct<=0.75) base=4;
-  else if(velPct<=0.9) base=1;
-  else base=0;
-  // Only apply trend penalty when trend data is actually present
-  const trend=trendNorm===null?0:trendNorm<-0.5?6:trendNorm<-0.2?4:trendNorm<0.1?0:0;
-  return base+trend;
+  if(velRaw===null||velRaw===0) return 20;
+  if(velRaw<=2)  return 12;
+  if(velRaw<=5)  return 9;
+  if(velRaw<=10) return 5;
+  if(velRaw<=20) return 2;
+  return 0;
 }
 function scoreCust(status,numC){
   if(status!=='Active') return 0;
@@ -523,12 +520,14 @@ function joinData(raw, wh) {
     const xyzClass  = (g(xyz,'xyz_classification')||'').toUpperCase();
     const units12mo = n(xyz,'Orders Deliveries and Invoices Invoiced Sales Units','Invoiced Sales Units','total_units');
     const coV       = n(xyz,'coefficient_of_variation');
-    // Compute trend from recent vs prior units; null when data absent (no penalty)
+    // Velocity ratio = recent 3-mo avg / prior 9-mo avg (reference formula).
+    // If prior=0 but recent>0 → 2 (new/growing). If no XYZ data → null → max penalty.
     const recent3   = n(xyz,'recent_3_months_units');
     const prior9    = n(xyz,'prior_9_months_units');
-    const trendNorm = (recent3||prior9)
-      ? (recent3/3 - prior9/9) / Math.max(prior9/9, 1)
-      : null;
+    const hasXyz    = !!(g(xyz,'xyz_classification')||recent3||prior9);
+    const priorAvg  = prior9/9;
+    const recentAvg = recent3/3;
+    const velRaw    = !hasXyz ? null : priorAvg>0 ? recentAvg/priorAvg : recentAvg>0 ? 2 : 0;
 
     // Customers
     const numCust   = n(cust,'# of Ordering Customers','num_customers');
@@ -562,11 +561,10 @@ function joinData(raw, wh) {
     const ito   = avgInv>0 ? (vop>0 ? (vop*12)/avgInv : costAmt>0 ? (costAmt*2)/avgInv : 0) : 0;
     const gmroi = hasLedger && costAmt>0 ? (netRev-costAmt)/avgInv : 0;
 
-    // Scoring
-    const catVelPct = (velPct[category]||{})[xyzClass] ?? null;
+    // Scoring (aligned to reference formulas)
     const dioSc   = scoreDIO(status,dio);
-    const abcSc   = scoreABC(status,catABC,subCatABC);
-    const veloSc  = scoreVelo(status,catVelPct,trendNorm);
+    const abcSc   = scoreABC(status,catABC);
+    const veloSc  = scoreVelo(status,velRaw);
     const custSc  = scoreCust(status,numCust);
     const gmroiSc = scoreGMROI(status,gmroi,hasLedger);
     const total   = status==='Active' ? dioSc+abcSc+veloSc+custSc+gmroiSc : null;
@@ -574,9 +572,9 @@ function joinData(raw, wh) {
 
     return {id,brand,itemName,category,subCat,saleUnit,status,daysActive,wh,
       qoh,cons30,cons60,onOrder,avgCostEa,ohCost,invPipe,totalVal,
-      rev12mo,catABC,subCatABC,xyzClass,units12mo,trendNorm,coV,
+      rev12mo,catABC,subCatABC,xyzClass,units12mo,velRaw,coV,
       numCust,custPct,netRev,costAmt,marginPct,avgInv,ito,dio,gmroi,
-      catVelPct,dioSc,abcSc,veloSc,custSc,gmroiSc,total,recommendation};
+      velRaw,dioSc,abcSc,veloSc,custSc,gmroiSc,total,recommendation};
   });
 
   // Customer category %
@@ -607,9 +605,16 @@ function buildBrands(joined){
     const pctSunset=d.skus>0?d.sunsetSkus/d.skus:0;
     const revRetention=d.rev-d.sunsetRev;
     const revRetPct=d.rev>0?revRetention/d.rev:0;
-    const brandRec=pctSunset===1?'EXIT BRAND':pctSunset>0?'TRIM':'KEEP';
     const blendedMargin=d.sumNetRev>0?(d.sumNetRev-d.sumCostAmt)/d.sumNetRev:0;
-    return {...d,avgDIO:avg(d.dioArr),blendedMargin,avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
+    const avgDIO=avg(d.dioArr);
+    // Reference 5-tier brand recommendation (Score Engine → Brand Evaluation sheet)
+    const brandRec=
+      (pctSunset>=0.6&&d.rev<50000)||d.aClass===0||d.rev<1000 ? 'EXIT BRAND'      :
+      revRetPct>0&&avgDIO>150                                   ? 'MOQ REVIEW'      :
+      pctSunset>=0.25&&d.aClass>0                               ? 'TRIM TAIL'       :
+      d.rev>200000&&d.aClass>0                                  ? 'KEEP — Strategic':
+                                                                  'MONITOR';
+    return {...d,avgDIO,blendedMargin,avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
   }).sort((a,b)=>b.rev-a.rev);
 }
 
@@ -622,6 +627,7 @@ function $int(v){return isNaN(v)?'—':Math.round(Number(v)).toLocaleString();}
 function abcBadge(v){const cls={A:'aa',B:'ab',C:'ac'}[v]||'ac';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
 function xyzBadge(v){const cls={X:'xx',Y:'xy',Z:'xz'}[v]||'xz';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
 function recBadge(v,status){if(status==='New To Market')return `<span class="rec rntm">NEW</span>`;if(status==='Inactive')return '<span class="muted">—</span>';if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP'?'rk':v==='WATCH'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
+function brandRecBadge(v){if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP — Strategic'?'rk':v==='MONITOR'?'ac':v==='MOQ REVIEW'?'ab':v==='TRIM TAIL'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
 function statusBadge(s){if(s==='New To Market')return `<span class="rec rntm">New To Market</span>`;return s||'—';}
 
 // ─── NAV ─────────────────────────────────────────────────────
@@ -970,7 +976,7 @@ const BE_COLS=[
   {label:'% Sunset',  val:r=>r.pctSunset,render:r=>`<td class="tr num">${$pct(r.pctSunset)}</td>`},
   {label:'Rev Retention',val:r=>r.revRetPct,render:r=>`<td class="tr num">${$pct(r.revRetPct)}</td>`},
   {label:'Cust Impacted',val:r=>r.custImpacted,render:r=>`<td class="tr num">${r.custImpacted}</td>`},
-  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}</td>`},
+  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${brandRecBadge(r.recommendation)}</td>`},
 ];
 function getBERows(){
   const q=document.getElementById('be-q')?.value.toLowerCase()||'';
