@@ -547,18 +547,19 @@ function joinData(raw, wh) {
     const vop = n(led,'Value of Outputs','value_of_outputs');
     const hasLedger = avgInv>0;
 
-    // DIO: use ledger VOP (same period as avgInv) for accuracy.
-    // Fallback to margin Cost Amount with ~6-month period adjustment.
-    // Items with inventory but zero outputs = dead stock → cap at 9999.
+    // DIO: primary = 6-month margin COGS (stable trailing signal, matches reference formula).
+    // Secondary = ledger VOP (30-day April) for items with no margin data.
+    // Single-month VOP is too volatile to use as primary (one slow month inflates DIO).
+    // Dead stock (avgInv > 0, no COGS anywhere) → 9999.
     let dio = 0;
     if(avgInv>0){
-      if(vop>0)        dio = avgInv*30/vop;           // ledger: 30-day April period
-      else if(costAmt>0) dio = avgInv*180/costAmt;    // margin fallback: ~6-month period
-      else               dio = 9999;                  // stock on hand, no sales signal
+      if(costAmt>0)    dio = avgInv*182/costAmt;      // margin: stable 6-month trailing COGS
+      else if(vop>0)   dio = avgInv*30/vop;           // VOP fallback: items with no margin data
+      else             dio = 9999;                    // stock on hand, no sales signal
     }
 
-    // ITO and GMROI — annualize VOP-based metrics where possible
-    const ito   = avgInv>0 ? (vop>0 ? (vop*12)/avgInv : costAmt>0 ? (costAmt*2)/avgInv : 0) : 0;
+    // ITO and GMROI — costAmt primary (stable 6-mo), VOP fallback
+    const ito   = avgInv>0 ? (costAmt>0 ? (costAmt*2)/avgInv : vop>0 ? (vop*12)/avgInv : 0) : 0;
     const gmroi = hasLedger && costAmt>0 ? (netRev-costAmt)/avgInv : 0;
 
     // Scoring (aligned to reference formulas)
@@ -805,12 +806,12 @@ function renderDashboard(){
     if(r.recommendation==='KEEP')d.keep++;else if(r.recommendation==='WATCH')d.watch++;else if(r.recommendation==='SUNSET')d.sunset++;
   });
   const catRows=Object.entries(catMap2).sort((a,b)=>b[1].rev-a[1].rev).map(([cat,d])=>{
-    // DIO/ITO: use ledger VOP (30-day, same window as avgInv) as primary; fallback to 6-mo costAmt
+    // DIO/ITO: costAmt primary (stable 6-mo trailing), VOP fallback for categories with no margin data
     const catDIO   = d.sumAvgInv>0
-      ? d.sumVop>0 ? d.sumAvgInv*30/d.sumVop : d.sumCostAmt>0 ? d.sumAvgInv*182/d.sumCostAmt : 0
+      ? d.sumCostAmt>0 ? d.sumAvgInv*182/d.sumCostAmt : d.sumVop>0 ? d.sumAvgInv*30/d.sumVop : 0
       : 0;
     const catITO   = d.sumAvgInv>0
-      ? d.sumVop>0 ? d.sumVop*12/d.sumAvgInv : d.sumCostAmt>0 ? d.sumCostAmt*2/d.sumAvgInv : 0
+      ? d.sumCostAmt>0 ? d.sumCostAmt*2/d.sumAvgInv : d.sumVop>0 ? d.sumVop*12/d.sumAvgInv : 0
       : 0;
     const catGMROI = d.sumAvgInv>0 ? (d.sumNetRev-d.sumCostAmt)/d.sumAvgInv : 0;
     return `<tr>
