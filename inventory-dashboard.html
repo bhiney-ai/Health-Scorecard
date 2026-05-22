@@ -611,7 +611,7 @@ function joinData(raw, wh) {
 // ─── BRAND AGGREGATION ───────────────────────────────────────
 function buildBrands(joined){
   const map={};
-  joined.forEach(r=>{
+  joined.filter(r=>r.status!=='Inactive'&&r.status!=='No Data').forEach(r=>{
     const key=r.brand+'|||'+r.category;
     if(!map[key]) map[key]={brand:r.brand,category:r.category,skus:0,rev:0,cost:0,aClass:0,bClass:0,cClass:0,xClass:0,zClass:0,dioArr:[],sumNetRev:0,sumCostAmt:0,gmroiArr:[],sunsetSkus:0,sunsetCust:0,sunsetRev:0};
     const d=map[key];
