@@ -59,7 +59,7 @@ table.dt tr:last-child td{border-bottom:none}
 .fbar input,.fbar select{padding:5px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;background:#fff;color:#1e293b;height:29px}
 .fbar input{min-width:170px}
 .rec{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-.rk{background:#dcfce7;color:#16a34a}.rw{background:#fef9c3;color:#92400e}.rs{background:#fee2e2;color:#dc2626}.rntm{background:#ede9fe;color:#5b21b6}
+.rk{background:#dcfce7;color:#16a34a}.rw{background:#fef9c3;color:#92400e}.rs{background:#fee2e2;color:#dc2626}.rntm{background:#ede9fe;color:#5b21b6}.rnd{background:#f1f5f9;color:#64748b}
 .aa{background:#dbeafe;color:#1e40af;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
 .ab{background:#e0e7ff;color:#3730a3;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
 .ac{background:#f3f4f6;color:#374151;display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
@@ -486,7 +486,13 @@ function joinData(raw, wh) {
     const da = daById[id] || {};
     const daysActive = n(da,'days Active','daysActive');
     const _baseStatus = procIds.size>0 ? (procIds.has(id)?'Active':'Inactive') : 'Active';
-    const status = (_baseStatus==='Active' && daysActive>0 && daysActive<90) ? 'New To Market' : _baseStatus;
+    // New To Market: <90 days active. No Data: active in proc but zero signal across all sources.
+    const _noData = _baseStatus==='Active' && !daysActive
+      && !g(abc,'inventory_classification') && !g(xyz,'xyz_classification')
+      && !n(mgn,'net revenue','Net Revenue') && !n(led,'Beginning Inv On-hand Value','beginning_inv_value');
+    const status = (_baseStatus==='Active' && daysActive>0 && daysActive<90) ? 'New To Market'
+                 : _noData ? 'No Data'
+                 : _baseStatus;
     const category = g(item,'Item Category Name','Category Name','Category');
     const subCat   = g(item,'item subcategory name','Sub Category Name','Sub Category');
     const brand    = g(item,'Catalog Brand','Brand');
@@ -609,7 +615,9 @@ function buildBrands(joined){
     const avgDIO=avg(d.dioArr);
     // Reference 5-tier brand recommendation (Score Engine → Brand Evaluation sheet)
     const brandRec=
-      (pctSunset>=0.6&&d.rev<50000)||d.aClass===0||d.rev<1000 ? 'EXIT BRAND'      :
+      d.rev<1000                                                ? 'EXIT BRAND'      : // near-zero revenue
+      (pctSunset>=0.6&&d.rev<50000)                            ? 'EXIT BRAND'      : // high sunset + low rev
+      (d.aClass===0&&d.rev<20000)                              ? 'EXIT BRAND'      : // no A-class + small brand
       revRetPct>0&&avgDIO>150                                   ? 'MOQ REVIEW'      :
       pctSunset>=0.25&&d.aClass>0                               ? 'TRIM TAIL'       :
       d.rev>200000&&d.aClass>0                                  ? 'KEEP — Strategic':
@@ -626,9 +634,9 @@ function $fix(v,d=2){return isNaN(v)||v===null?'—':Number(v).toFixed(d);}
 function $int(v){return isNaN(v)?'—':Math.round(Number(v)).toLocaleString();}
 function abcBadge(v){const cls={A:'aa',B:'ab',C:'ac'}[v]||'ac';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
 function xyzBadge(v){const cls={X:'xx',Y:'xy',Z:'xz'}[v]||'xz';return v?`<span class="${cls}">${v}</span>`:'<span class="muted">—</span>';}
-function recBadge(v,status){if(status==='New To Market')return `<span class="rec rntm">NEW</span>`;if(status==='Inactive')return '<span class="muted">—</span>';if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP'?'rk':v==='WATCH'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
+function recBadge(v,status){if(status==='New To Market')return `<span class="rec rntm">NEW</span>`;if(status==='No Data')return `<span class="rec rnd">NO DATA</span>`;if(status==='Inactive')return '<span class="muted">—</span>';if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP'?'rk':v==='WATCH'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
 function brandRecBadge(v){if(!v)return '<span class="muted">—</span>';const cls=v==='KEEP — Strategic'?'rk':v==='MONITOR'?'ac':v==='MOQ REVIEW'?'ab':v==='TRIM TAIL'?'rw':'rs';return `<span class="rec ${cls}">${v}</span>`;}
-function statusBadge(s){if(s==='New To Market')return `<span class="rec rntm">New To Market</span>`;return s||'—';}
+function statusBadge(s){if(s==='New To Market')return `<span class="rec rntm">New To Market</span>`;if(s==='No Data')return `<span class="rec rnd">No Data</span>`;return s||'—';}
 
 // ─── NAV ─────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(el=>{
