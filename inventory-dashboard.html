@@ -573,7 +573,7 @@ function joinData(raw, wh) {
     return {id,brand,itemName,category,subCat,saleUnit,status,daysActive,wh,
       qoh,cons30,cons60,onOrder,avgCostEa,ohCost,invPipe,totalVal,
       rev12mo,catABC,subCatABC,xyzClass,units12mo,velRaw,coV,
-      numCust,custPct,netRev,costAmt,marginPct,avgInv,ito,dio,gmroi,
+      numCust,custPct,netRev,costAmt,marginPct,avgInv,vop,ito,dio,gmroi,
       velRaw,dioSc,abcSc,veloSc,custSc,gmroiSc,total,recommendation};
   });
 
@@ -799,14 +799,19 @@ function renderDashboard(){
   // Category performance — aggregate components first, then derive ratios
   const catMap2={};
   J.forEach(r=>{
-    if(!catMap2[r.category])catMap2[r.category]={skus:0,rev:0,cost:0,sumAvgInv:0,sumCostAmt:0,sumNetRev:0,keep:0,watch:0,sunset:0};
+    if(!catMap2[r.category])catMap2[r.category]={skus:0,rev:0,cost:0,sumAvgInv:0,sumVop:0,sumCostAmt:0,sumNetRev:0,keep:0,watch:0,sunset:0};
     const d=catMap2[r.category];d.skus++;d.rev+=r.rev12mo;d.cost+=r.ohCost;
-    d.sumAvgInv+=r.avgInv;d.sumCostAmt+=r.costAmt;d.sumNetRev+=r.netRev;
+    d.sumAvgInv+=r.avgInv;d.sumVop+=r.vop;d.sumCostAmt+=r.costAmt;d.sumNetRev+=r.netRev;
     if(r.recommendation==='KEEP')d.keep++;else if(r.recommendation==='WATCH')d.watch++;else if(r.recommendation==='SUNSET')d.sunset++;
   });
   const catRows=Object.entries(catMap2).sort((a,b)=>b[1].rev-a[1].rev).map(([cat,d])=>{
-    const catITO   = d.sumAvgInv>0 ? d.sumCostAmt/d.sumAvgInv : 0;
-    const catDIO   = d.sumCostAmt>0 ? (d.sumAvgInv/d.sumCostAmt)*365 : 0;
+    // DIO/ITO: use ledger VOP (30-day, same window as avgInv) as primary; fallback to 6-mo costAmt
+    const catDIO   = d.sumAvgInv>0
+      ? d.sumVop>0 ? d.sumAvgInv*30/d.sumVop : d.sumCostAmt>0 ? d.sumAvgInv*182/d.sumCostAmt : 0
+      : 0;
+    const catITO   = d.sumAvgInv>0
+      ? d.sumVop>0 ? d.sumVop*12/d.sumAvgInv : d.sumCostAmt>0 ? d.sumCostAmt*2/d.sumAvgInv : 0
+      : 0;
     const catGMROI = d.sumAvgInv>0 ? (d.sumNetRev-d.sumCostAmt)/d.sumAvgInv : 0;
     return `<tr>
     <td>${cat}</td><td class="tr num">${d.skus}</td><td class="tr num">${$m(d.rev)}</td><td class="tr num">${$m(d.cost)}</td>
