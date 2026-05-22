@@ -612,9 +612,10 @@ function joinData(raw, wh) {
 function buildBrands(joined){
   const map={};
   joined.filter(r=>r.status!=='Inactive'&&r.status!=='No Data').forEach(r=>{
-    const key=r.brand+'|||'+r.category;
-    if(!map[key]) map[key]={brand:r.brand,category:r.category,skus:0,rev:0,cost:0,aClass:0,bClass:0,cClass:0,xClass:0,zClass:0,dioArr:[],sumNetRev:0,sumCostAmt:0,gmroiArr:[],sunsetSkus:0,sunsetCust:0,sunsetRev:0};
+    const key=r.brand;
+    if(!map[key]) map[key]={brand:r.brand,catCounts:{},skus:0,rev:0,cost:0,aClass:0,bClass:0,cClass:0,xClass:0,zClass:0,dioArr:[],sumNetRev:0,sumCostAmt:0,gmroiArr:[],sunsetSkus:0,sunsetCust:0,sunsetRev:0};
     const d=map[key];
+    if(r.category)d.catCounts[r.category]=(d.catCounts[r.category]||0)+1;
     d.skus++;d.rev+=r.rev12mo;d.cost+=r.ohCost;
     if(r.catABC==='A')d.aClass++;else if(r.catABC==='B')d.bClass++;else if(r.catABC==='C')d.cClass++;
     if(r.xyzClass==='X')d.xClass++;else if(r.xyzClass==='Z')d.zClass++;
@@ -625,6 +626,9 @@ function buildBrands(joined){
   });
   const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
   return Object.values(map).map(d=>{
+    // Derive display category: primary (most SKUs) or "Multiple"
+    const catEntries=Object.entries(d.catCounts).sort((a,b)=>b[1]-a[1]);
+    const category=catEntries.length===0?'—':catEntries.length===1?catEntries[0][0]:'Multiple';
     const pctSunset=d.skus>0?d.sunsetSkus/d.skus:0;
     const revRetention=d.rev-d.sunsetRev;
     const revRetPct=d.rev>0?revRetention/d.rev:0;
@@ -639,7 +643,7 @@ function buildBrands(joined){
       pctSunset>=0.25&&d.aClass>0                               ? 'TRIM TAIL'       :
       d.rev>200000&&d.aClass>0                                  ? 'KEEP — Strategic':
                                                                   'MONITOR';
-    return {...d,avgDIO,blendedMargin,avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
+    return {...d,category,avgDIO,blendedMargin,avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
   }).sort((a,b)=>b.rev-a.rev);
 }
 
