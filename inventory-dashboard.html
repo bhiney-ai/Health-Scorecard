@@ -473,7 +473,6 @@ function joinData(raw, wh) {
     .map(r=>String(g(r,'item_id','Item ID')||'').trim()));
   const daById = buildLookup(g2.daysAct||[], 'Item ID','item_id');
   const totalCustWH = S.totalCust[wh] || 1;
-  const velPct = buildVelPct(g2.xyz||[], null); // already WH-filtered
 
   const rows = ohRows.map(item=>{
     const id = String(g(item,'Item ID','item_id')||'').trim();
@@ -567,13 +566,13 @@ function joinData(raw, wh) {
     const abcSc   = scoreABC(status,catABC);
     const veloSc  = scoreVelo(status,velRaw);
     const custSc  = scoreCust(status,numCust);
-    const gmroiSc = scoreGMROI(status,gmroi,hasLedger);
+    const gmroiSc = scoreGMROI(status,gmroi,hasLedger&&costAmt>0);
     const total   = status==='Active' ? dioSc+abcSc+veloSc+custSc+gmroiSc : null;
     const recommendation = rec(status,total);
 
     return {id,brand,itemName,category,subCat,saleUnit,status,daysActive,wh,
       qoh,cons30,cons60,onOrder,avgCostEa,ohCost,invPipe,totalVal,
-      rev12mo,catABC,subCatABC,xyzClass,units12mo,velRaw,coV,
+      rev12mo,catABC,subCatABC,xyzClass,units12mo,coV,
       numCust,custPct,netRev,costAmt,marginPct,avgInv,vop,ito,dio,gmroi,
       velRaw,dioSc,abcSc,veloSc,custSc,gmroiSc,total,recommendation};
   });
@@ -928,7 +927,7 @@ const OH_COLS=[
   {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
   {label:'Sub Cat',   val:r=>r.subCat,  render:r=>`<td>${r.subCat||'—'}</td>`},
   {label:'Unit',      val:r=>r.saleUnit, render:r=>`<td>${r.saleUnit||'—'}</td>`},
-  {label:'QOH (ea)',  val:r=>r.qoh,   render:r=>`<td class="tr num">${$int(r.qoh)}</td>`},
+  {label:'QOH',       val:r=>r.qoh,   render:r=>`<td class="tr num">${$int(r.qoh)}</td>`},
   {label:'30-Day Cons',val:r=>r.cons30,render:r=>`<td class="tr num">${r.cons30?$int(r.cons30):'—'}</td>`},
   {label:'60-Day Cons',val:r=>r.cons60,render:r=>`<td class="tr num">${r.cons60?$int(r.cons60):'—'}</td>`},
   {label:'On Order',  val:r=>r.onOrder,render:r=>`<td class="tr num">${r.onOrder?$int(r.onOrder):'—'}</td>`},
