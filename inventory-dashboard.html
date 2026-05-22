@@ -402,9 +402,10 @@ function buildVelPct(xyzRows, wh) {
   Object.entries(catMap).forEach(([cat,arr])=>{
     const tot=arr.length;
     pct[cat]={};
-    // c > cls counts items with SLOWER velocity (higher letter = slower in XYZ)
+    // c < cls counts items FASTER than cls (lower letter = faster in XYZ)
+    // velPct = fraction of category that moves faster → X≈0, Z≈high → higher = worse mover
     ['X','Y','Z'].forEach(cls=>{
-      pct[cat][cls]=tot>0?arr.filter(c=>c>cls).length/tot:0;
+      pct[cat][cls]=tot>0?arr.filter(c=>c<cls).length/tot:0;
     });
   });
   return pct;
@@ -607,7 +608,7 @@ function buildBrands(joined){
     const pctSunset=d.skus>0?d.sunsetSkus/d.skus:0;
     const revRetention=d.rev-d.sunsetRev;
     const revRetPct=d.rev>0?revRetention/d.rev:0;
-    const brandRec=pctSunset===1?'EXIT BRAND':pctSunset>0?'TRIM':'KEEP';
+    const brandRec=pctSunset>=0.75?'EXIT BRAND':pctSunset>0?'TRIM':'KEEP';
     const blendedMargin=d.sumNetRev>0?(d.sumNetRev-d.sumCostAmt)/d.sumNetRev:0;
     return {...d,avgDIO:avg(d.dioArr),blendedMargin,avgGMROI:avg(d.gmroiArr),pctSunset,revRetention,revRetPct,custImpacted:d.sunsetCust,recommendation:brandRec};
   }).sort((a,b)=>b.rev-a.rev);
