@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
 /* ── Odeko brand tokens ──────────────────────────────────────
    Mocha (primary) : #40180B   Yellow (accent) : #FFD100
@@ -1165,17 +1165,208 @@ document.getElementById('in-clear').onclick=()=>{
 };
 
 // ─── EXPORT ──────────────────────────────────────────────────
-document.getElementById('btn-export').addEventListener('click',()=>{
+document.getElementById('btn-export').addEventListener('click', async ()=>{
   if(!S.wh){alert('Select a warehouse first.');return;}
-  const wb=XLSX.utils.book_new();
-  function addSheet(name,rows){if(!rows.length)return;XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),name);}
-  addSheet('Score Engine',getSERows());
-  addSheet('On Hand',getOHRows());
-  addSheet('Brand Evaluation',getBERows());
-  addSheet('Summary',getSumRows());
-  addSheet('Inactive',getINRows());
-  if(!wb.SheetNames.length){alert('No data to export.');return;}
-  XLSX.writeFile(wb,`Inventory_Health_${S.wh}_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+  // ── Brand palette (ARGB, no #) ────────────────────────────
+  const C={
+    mocha:    'FF40180B', mochaMid: 'FF7A5C4E', mochaLt:  'FFF5F0E8',
+    yellow:   'FFFFD100', white:    'FFFFFFFF',
+    keepBg:   'FFDCFCE7', keepFg:   'FF166534',
+    watchBg:  'FFFEF9C3', watchFg:  'FF92400E',
+    sunsetBg: 'FFFEE2E2', sunsetFg: 'FFDC2626',
+    border:   'FFE8E0D4',
+  };
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator='Odeko Inventory Health';
+  wb.created=new Date();
+
+  // ── Shared style builders ─────────────────────────────────
+  function hdrStyle(){
+    return {
+      font:{name:'Arial',bold:true,size:10,color:{argb:C.white}},
+      fill:{type:'pattern',pattern:'solid',fgColor:{argb:C.mocha}},
+      alignment:{horizontal:'center',vertical:'middle',wrapText:true},
+      border:{top:{style:'thin',color:{argb:C.mochaMid}},bottom:{style:'thin',color:{argb:C.mochaMid}},
+              left:{style:'thin',color:{argb:C.mochaMid}},right:{style:'thin',color:{argb:C.mochaMid}}},
+    };
+  }
+  function dataFont(muted){ return {name:'Arial',size:10,color:{argb:muted?C.mochaMid:C.mocha}}; }
+  function hairBorder(){ return {bottom:{style:'hair',color:{argb:C.border}}}; }
+
+  function styleHdrRow(ws,colWidths){
+    const r=ws.getRow(1); r.height=28;
+    const s=hdrStyle();
+    r.eachCell(c=>{c.font=s.font;c.fill=s.fill;c.alignment=s.alignment;c.border=s.border;});
+    colWidths.forEach((w,i)=>{ws.getColumn(i+1).width=w;});
+  }
+
+  function styleDataRow(row, muted=false){
+    row.height=15;
+    row.eachCell(c=>{c.font=dataFont(muted);c.border=hairBorder();});
+  }
+
+  function recFill(v){
+    const m={
+      'KEEP':         {bg:C.keepBg,   fg:C.keepFg},
+      'WATCH':        {bg:C.watchBg,  fg:C.watchFg},
+      'SUNSET':       {bg:C.sunsetBg, fg:C.sunsetFg},
+      'EXIT BRAND':   {bg:C.sunsetBg, fg:C.sunsetFg},
+      'MOQ REVIEW':   {bg:C.watchBg,  fg:C.watchFg},
+      'TRIM TAIL':    {bg:C.watchBg,  fg:C.watchFg},
+      'KEEP — Strategic':{bg:C.keepBg,fg:C.keepFg},
+      'MONITOR':      {bg:C.mochaLt,  fg:C.mochaMid},
+    };
+    return m[v]||null;
+  }
+  function applyRecCell(cell, v){
+    const f=recFill(v); if(!f)return;
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:f.bg}};
+    cell.font={name:'Arial',size:10,bold:true,color:{argb:f.fg}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+  }
+
+  // ── Score Engine ──────────────────────────────────────────
+  const seWS=wb.addWorksheet('Score Engine');
+  seWS.views=[{state:'frozen',xSplit:3,ySplit:1,activeCell:'D2'}];
+  seWS.addRow(['Item ID','Brand','Item Name','Category','Status','Days Active',
+    'ABC','XYZ','DIO','ITO','GMROI','Margin %','12-Mo Rev ($)','OH Cost ($)',
+    'Customers','DIO Sc','ABC Sc','Velo Sc','Cust Sc','GMROI Sc','Score','Recommendation']);
+  styleHdrRow(seWS,[12,22,46,18,14,12,7,7,10,9,10,10,15,15,11,8,8,8,8,10,8,20]);
+
+  getSERows().forEach(r=>{
+    const row=seWS.addRow([
+      r.id,r.brand,r.itemName,r.category,r.status,
+      r.daysActive||'',r.catABC||'',r.xyzClass||'',
+      r.dio>0?r.dio:'',r.ito||'',r.gmroi||'',r.marginPct||'',
+      r.rev12mo||'',r.ohCost||'',r.numCust||'',
+      r.total!=null?r.dioSc:'',r.total!=null?r.abcSc:'',
+      r.total!=null?r.veloSc:'',r.total!=null?r.custSc:'',
+      r.total!=null?r.gmroiSc:'',r.total!=null?r.total:'',
+      r.recommendation||'',
+    ]);
+    styleDataRow(row);
+    const n=row.number;
+    seWS.getCell(n,9).numFmt ='#,##0';
+    seWS.getCell(n,10).numFmt='#,##0.0';
+    seWS.getCell(n,11).numFmt='#,##0.00';
+    seWS.getCell(n,12).numFmt='0.0%';
+    seWS.getCell(n,13).numFmt='"$"#,##0';
+    seWS.getCell(n,14).numFmt='"$"#,##0';
+    // Score coloring
+    const sc=seWS.getCell(n,21);
+    if(r.total>=55){sc.fill={type:'pattern',pattern:'solid',fgColor:{argb:C.sunsetBg}};sc.font={name:'Arial',size:10,bold:true,color:{argb:C.sunsetFg}};}
+    else if(r.total>=40){sc.fill={type:'pattern',pattern:'solid',fgColor:{argb:C.watchBg}};sc.font={name:'Arial',size:10,bold:true,color:{argb:C.watchFg}};}
+    applyRecCell(seWS.getCell(n,22),r.recommendation);
+  });
+
+  // ── On Hand ───────────────────────────────────────────────
+  const ohWS=wb.addWorksheet('On Hand');
+  ohWS.views=[{state:'frozen',xSplit:2,ySplit:1,activeCell:'C2'}];
+  ohWS.addRow(['Item ID','Item Name','Brand','Category','Sub Cat','Sale Unit',
+    'QOH','30-Day Cons','60-Day Cons','On Order','Avg Cost ($ea)','OH Cost ($)',
+    'Inv+Pipe','Total Value ($)','DIO','Days Active']);
+  styleHdrRow(ohWS,[12,46,22,18,18,12,10,13,13,10,15,15,10,16,9,12]);
+
+  getOHRows().forEach(r=>{
+    const row=ohWS.addRow([
+      r.id,r.itemName,r.brand,r.category,r.subCat,r.saleUnit,
+      r.qoh||'',r.cons30||'',r.cons60||'',r.onOrder||'',
+      r.avgCostEa||'',r.ohCost||'',r.invPipe||'',r.totalVal||'',
+      r.dio>0?r.dio:'',r.daysActive||'',
+    ]);
+    styleDataRow(row);
+    const n=row.number;
+    ohWS.getCell(n,11).numFmt='"$"#,##0.00';
+    ohWS.getCell(n,12).numFmt='"$"#,##0';
+    ohWS.getCell(n,14).numFmt='"$"#,##0';
+    ohWS.getCell(n,15).numFmt='#,##0';
+  });
+
+  // ── Brand Evaluation ──────────────────────────────────────
+  const beWS=wb.addWorksheet('Brand Evaluation');
+  beWS.views=[{state:'frozen',ySplit:1,activeCell:'A2'}];
+  beWS.addRow(['Brand','Category','SKUs','12-Mo Rev ($)','OH Cost ($)',
+    'A-Class','B-Class','C-Class','X-Class','Z-Class',
+    'Avg DIO','Margin %','Avg GMROI','Sunset SKUs','% Sunset','Rev Retention %','Cust Impacted','Recommendation']);
+  styleHdrRow(beWS,[26,18,8,16,14,9,9,9,9,9,10,10,12,12,10,16,14,22]);
+
+  getBERows().forEach(r=>{
+    const row=beWS.addRow([
+      r.brand,r.category,r.skus,r.rev||'',r.cost||'',
+      r.aClass,r.bClass,r.cClass,r.xClass,r.zClass,
+      r.avgDIO||'',r.blendedMargin||'',r.avgGMROI||'',
+      r.sunsetSkus,r.pctSunset||'',r.revRetPct||'',
+      r.custImpacted,r.recommendation||'',
+    ]);
+    styleDataRow(row);
+    const n=row.number;
+    beWS.getCell(n,4).numFmt ='"$"#,##0';
+    beWS.getCell(n,5).numFmt ='"$"#,##0';
+    beWS.getCell(n,11).numFmt='#,##0';
+    beWS.getCell(n,12).numFmt='0.0%';
+    beWS.getCell(n,13).numFmt='#,##0.00';
+    beWS.getCell(n,15).numFmt='0%';
+    beWS.getCell(n,16).numFmt='0%';
+    applyRecCell(beWS.getCell(n,18),r.recommendation);
+  });
+
+  // ── Summary ───────────────────────────────────────────────
+  const sumWS=wb.addWorksheet('Summary');
+  sumWS.views=[{state:'frozen',xSplit:3,ySplit:1,activeCell:'D2'}];
+  sumWS.addRow(['Item ID','Brand','Item Name','Category','Sub Cat','Status',
+    'OH Cost ($)','12-Mo Rev ($)','ABC','Sub ABC','XYZ','Units Sold',
+    'Customers','Cust %','Margin %','ITO','DIO','GMROI']);
+  styleHdrRow(sumWS,[12,22,46,18,18,14,14,15,7,9,7,11,11,10,10,9,9,10]);
+
+  getSumRows().forEach(r=>{
+    const row=sumWS.addRow([
+      r.id,r.brand,r.itemName,r.category,r.subCat,r.status,
+      r.ohCost||'',r.rev12mo||'',r.catABC||'',r.subCatABC||'',r.xyzClass||'',
+      r.units12mo||'',r.numCust||'',r.custPct||'',r.marginPct||'',
+      r.ito||'',r.dio>0?r.dio:'',r.gmroi||'',
+    ]);
+    styleDataRow(row);
+    const n=row.number;
+    sumWS.getCell(n,7).numFmt ='"$"#,##0';
+    sumWS.getCell(n,8).numFmt ='"$"#,##0';
+    sumWS.getCell(n,14).numFmt='0.0%';
+    sumWS.getCell(n,15).numFmt='0.0%';
+    sumWS.getCell(n,16).numFmt='#,##0.0';
+    sumWS.getCell(n,17).numFmt='#,##0';
+    sumWS.getCell(n,18).numFmt='#,##0.00';
+  });
+
+  // ── Inactive ──────────────────────────────────────────────
+  const inWS=wb.addWorksheet('Inactive');
+  inWS.views=[{state:'frozen',xSplit:2,ySplit:1,activeCell:'C2'}];
+  inWS.addRow(['Item ID','Brand','Item Name','Category','Sub Cat','Status',
+    'Days Active','QOH','On Order','Avg Cost ($ea)','OH Cost ($)','12-Mo Rev ($)','Customers']);
+  styleHdrRow(inWS,[12,22,46,18,18,12,12,10,10,15,14,15,11]);
+  // Muted header for inactive sheet
+  inWS.getRow(1).eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:C.mochaMid}};});
+
+  getINRows().forEach(r=>{
+    const row=inWS.addRow([
+      r.id,r.brand,r.itemName,r.category,r.subCat,r.status,
+      r.daysActive||'',r.qoh>0?r.qoh:'',r.onOrder>0?r.onOrder:'',
+      r.avgCostEa>0?r.avgCostEa:'',r.ohCost>0?r.ohCost:'',
+      r.rev12mo>0?r.rev12mo:'',r.numCust>0?r.numCust:'',
+    ]);
+    styleDataRow(row,true);
+    const n=row.number;
+    inWS.getCell(n,10).numFmt='"$"#,##0.00';
+    inWS.getCell(n,11).numFmt='"$"#,##0';
+    inWS.getCell(n,12).numFmt='"$"#,##0';
+  });
+
+  // ── Download ──────────────────────────────────────────────
+  const buf=await wb.xlsx.writeBuffer();
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;
+  a.download=`Inventory_Health_${S.wh}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  a.click();URL.revokeObjectURL(url);
 });
 
 // ─── INIT ────────────────────────────────────────────────────
