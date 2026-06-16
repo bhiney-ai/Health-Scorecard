@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bulk Upload · Mapping Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#f8fafc;min-height:100vh}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 24px 80px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.logo{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#3b82f6}
+h1{font-size:28px;font-weight:700;line-height:1.2;margin-top:6px}
+.sub{font-size:14px;color:#64748b;margin-top:8px;max-width:680px;line-height:1.6}
+.sop-link{font-size:12px;color:#64748b;text-decoration:none;border:1px solid #334155;border-radius:8px;padding:7px 14px;white-space:nowrap}
+.sop-link:hover{border-color:#475569;color:#94a3b8}
+.divider{height:1px;background:#1e293b;margin:24px 0}
+
+/* template tabs */
+.tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.tab{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px 16px;cursor:pointer;transition:all .15s;min-width:150px}
+.tab:hover{border-color:#475569}
+.tab.active{border-color:#3b82f6;background:#1d2c44;box-shadow:0 0 0 1px #3b82f6 inset}
+.tab .t-name{font-size:13px;font-weight:600;color:#f1f5f9}
+.tab .t-meta{font-size:11px;color:#64748b;margin-top:3px}
+
+/* steps */
+.step{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px 22px;margin-bottom:18px}
+.step-h{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.step-n{width:22px;height:22px;border-radius:6px;background:#0f172a;border:1px solid #334155;font-size:12px;font-weight:700;color:#3b82f6;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step-t{font-size:15px;font-weight:700;color:#f1f5f9}
+.step-d{font-size:13px;color:#64748b;line-height:1.6;margin:4px 0 14px 32px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-left:32px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;text-decoration:none}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-primary:disabled{background:#1e3a5f;color:#64748b;cursor:not-allowed}
+.btn-ghost{background:transparent;color:#94a3b8;border:1px solid #334155}.btn-ghost:hover{border-color:#475569;color:#cbd5e1}
+.file-name{font-size:12px;color:#64748b}
+.muted{font-size:12px;color:#475569}
+
+/* mapping table */
+.table-scroll{overflow-x:auto;border:1px solid #334155;border-radius:10px;margin-top:4px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+thead th{background:#162033;text-align:left;padding:10px 12px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #334155;white-space:nowrap}
+tbody td{padding:9px 12px;border-bottom:1px solid #1e293b;vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#172033}
+.col-name{font-weight:600;color:#f1f5f9;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.badge{font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 6px;border-radius:5px}
+.b-req{background:#7f1d1d;color:#fecaca}
+.b-opt{background:#1e293b;color:#94a3b8;border:1px solid #334155}
+.b-null{background:#1e3a5f;color:#93c5fd}
+.desc{color:#94a3b8;font-size:12px;line-height:1.5;max-width:340px}
+.ex{color:#475569;font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:3px}
+select.map{background:#0f172a;color:#f1f5f9;border:1px solid #334155;border-radius:7px;padding:6px 8px;font-size:12.5px;min-width:170px;max-width:230px}
+select.map:focus{outline:none;border-color:#3b82f6}
+select.map.empty-required{border-color:#b45309}
+.auto-tag{font-size:10px;color:#10b981;margin-left:6px}
+
+/* status / validation */
+.status{margin-left:32px;margin-top:14px;font-size:13px;display:none}
+.status.show{display:block}
+.status .ok{color:#34d399}
+.status .err{color:#f87171}
+.val-list{list-style:none;margin-top:8px}
+.val-list li{font-size:12.5px;color:#fca5a5;padding:3px 0 3px 18px;position:relative}
+.val-list li:before{content:"!";position:absolute;left:0;color:#f87171;font-weight:700}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 14px 32px;font-size:11.5px;color:#64748b}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.preview{margin-left:32px;margin-top:14px;font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748b;background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:12px;overflow-x:auto;white-space:pre;display:none}
+.preview.show{display:block}
+.footer{margin-top:48px;font-size:11px;color:#334155;text-align:center}
+.count-pill{font-size:11px;color:#93c5fd;background:#1e3a5f;border-radius:20px;padding:3px 10px;margin-left:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <div class="logo">Odeko · Procurement</div>
+      <h1>Bulk Upload — Mapping Dashboard</h1>
+    </div>
+    <a class="sop-link" href="https://app.notion.com/p/odeko/Bulk-Upload-2604ecea2bdb4de2977afdde4b2a28d7" target="_blank" rel="noopener">📖 Reference SOP ↗</a>
+  </div>
+  <p class="sub">Map your raw source columns onto an Odeko bulk-upload template. Field rules (required, <code>NULL</code>-able, examples) are pulled straight from the Bulk Upload SOP. Validate, then export an upload-ready CSV in the exact base-template format.</p>
+
+  <div class="divider"></div>
+
+  <!-- Template selector -->
+  <div class="tabs" id="tabs"></div>
+
+  <!-- Step 1: source -->
+  <div class="step">
+    <div class="step-h"><div class="step-n">1</div><div class="step-t">Load your source data</div></div>
+    <div class="step-d">Upload a CSV of your raw data, or skip to just download a blank template. The first row is treated as your column headers.</div>
+    <div class="row">
+      <label class="btn btn-ghost" for="srcfile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        Upload source CSV
+      </label>
+      <input type="file" id="srcfile" accept=".csv,text/csv" style="display:none">
+      <span class="file-name" id="srcname">No file selected — mapping uses manual selection.</span>
+      <button class="btn btn-ghost" id="dlblank" type="button">⬇ Download blank template</button>
+    </div>
+  </div>
+
+  <!-- Step 2: mapping -->
+  <div class="step">
+    <div class="step-h"><div class="step-n">2</div><div class="step-t" id="map-title">Map columns</div><span class="count-pill" id="colcount"></span></div>
+    <div class="step-d" id="map-desc"></div>
+    <div class="legend">
+      <span><span class="badge b-req">Required</span> must have a value</span>
+      <span><span class="badge b-opt">Optional</span> may be left blank</span>
+      <span><span class="badge b-null">NULL ok</span> accepts <code>NULL</code> to clear the field</span>
+      <span><span class="auto-tag">● auto</span> matched from your headers</span>
+    </div>
+    <div class="table-scroll">
+      <table id="maptable">
+        <thead><tr>
+          <th>Template column</th>
+          <th>Your source column</th>
+          <th>Description (per SOP)</th>
+        </tr></thead>
+        <tbody id="mapbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Step 3: export -->
+  <div class="step">
+    <div class="step-h"><div class="step-n">3</div><div class="step-t">Validate &amp; export</div></div>
+    <div class="step-d">We check required columns are mapped (when source data is loaded) before exporting in the exact base-template header order.</div>
+    <div class="row">
+      <button class="btn btn-primary" id="export" type="button">⬇ Export upload CSV</button>
+      <button class="btn btn-ghost" id="togglePreview" type="button">Preview output</button>
+      <span class="muted" id="rowinfo"></span>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="preview" id="preview"></div>
+  </div>
+
+  <div class="footer">Bulk Upload Mapping Dashboard · Field rules sourced from the Odeko Bulk Upload SOP · Powered by Claude</div>
+</div>
+
+<script>
+/* ----------------------------------------------------------------------------
+   Template definitions. Column metadata is transcribed from the Bulk Upload SOP.
+   req  = required (column header has no trailing "?")
+   nul  = accepts the literal NULL value to clear the field
+   desc = SOP description
+   ex   = SOP example
+   Header order / blank spacer columns are preserved exactly from the base CSVs.
+---------------------------------------------------------------------------- */
+const SPACER = {spacer:true, name:""};
+function f(name, req, nul, desc, ex){ return {name, req, nul, desc, ex}; }
+
+const TEMPLATES = {
+  item: {
+    label: "Item Details",
+    desc: "Basic item details — name, category, units, descriptions, dimensions.",
+    file: "Template_Item_Details.csv",
+    cols: [
+      f("UUID?", false, false, "UUID of the item. A value here means the item already exists and its attributes will be updated.", "22f4c65f-b50f-4b32-a594-28bbfd5f07ce"),
+      f("Name", true, false, "Name of the item. When creating, must be unique or creation fails.", "Cold Cup 12oz"),
+      f("Type", true, false, "The type of item being created.", "INVENTORY | NONINVENTORY"),
+      f("Brand", true, false, "The brand name of the product.", "Odeko"),
+      f("Vendor Ordering Code", true, false, "The vendor ordering code / display code.", "12oz Cold Cup, 1000"),
+      f("Serialized?", false, false, "Whether the item is serialized.", "true | false"),
+      f("Purchase Price", true, false, "The price the item is purchased for.", "9.99 | 5.13"),
+      f("Purchase Unit", true, false, "Name of the purchase unit (see dropdown in edit mode).", "Cases (15x)"),
+      f("Stock Unit", true, false, "Name of the stock unit (see dropdown in edit mode).", "Each"),
+      f("Sale Unit", true, false, "Name of the sale unit (see dropdown in edit mode).", "3 Pack"),
+      f("Category", true, false, "Name of the category (see dropdown in edit mode).", "Paper Goods"),
+      f("Subcategory", true, false, "Subcategory that is a child of the selected category.", "Cups"),
+      f("Location SKU Perishability", true, false, "Perishability of the location SKU.", "Perishable | Non-Perishable | Semi-Perishable"),
+      f("Item Size Quantity", true, false, "A valid number paired with the Item Size Unit.", "1 | 1.5"),
+      f("Item Size Unit", true, false, "The unit indicating item size.", "Each | cup | fl oz | g | gal | kg | L | lb | mg | mL | oz | pint | quart | tbsp | tsp"),
+      SPACER,
+      f("Market?", false, false, "Name of the warehouse-association market.", "EWR1 | LAX1"),
+      f("Vendor?", false, false, "Vendor for the warehouse association. Requires Market? to be set.", "Baldor | Karat"),
+      f("Fulfillment Warehouses?", false, false, "Fulfillment warehouse names. Requires Market? & Vendor?. Inventory items only.", "EWR1, AUS1 | MIA1, LAX1"),
+      SPACER,
+      f("Min Deliverable Shelf Life?", false, true, "Positive whole number — total shelf life in days within a warehouse.", "7 | 365 | NULL"),
+      f("Location SKU Shelf Life?", false, false, "Positive whole number — total days.", "7 | 365"),
+      f("UPC Code?", false, true, "Comma-separated list of UPC codes.", "upccode-1, upccode-2 | NULL"),
+      f("Catalog Description?", false, true, "Catalog description text.", "This is my catalog description | NULL"),
+      f("Display In Catalog?", false, false, "Whether to display the item in the catalog.", "yes | no"),
+      f("Standing Orders?", false, false, "Whether standing orders are allowed.", "yes | no"),
+      f("Refrigeration State?", false, true, "Refrigeration state of the item.", "Frozen | Refrigerated | Room Temp | NULL"),
+      f("Transit Method?", false, true, "How the item is transited.", "Pick Up | Delivered | NULL"),
+      f("Purchase Multiple?", false, false, "Whole number between 1 and 30.", "1 | 9"),
+      f("Minimum Quantity to Order?", false, false, "Whole number between 1 and 300.", "0 | 1 | 299"),
+      f("Parent Tag?", false, true, "Must be an existing parent tag in the system.", "Dietary Preference | Eco-Friendly | Values"),
+      f("Child Tag?", false, true, "Comma-separated child tags within the parent tag.", "Lactose Free, Vegan, Gluten Free"),
+      SPACER,
+      f("Each Length? (in)", false, true, "Number.", "0 | 1 | 299"),
+      f("Each Width? (in)", false, true, "Number.", "0 | 1 | 299"),
+      f("Each Height? (in)", false, true, "Number.", "0 | 1 | 299"),
+      f("Each Weight? (lbs)", false, true, "Number.", "0 | 1 | 299"),
+      f("Case Length? (in)", false, true, "Number.", "0 | 1 | 299"),
+      f("Case Width? (in)", false, true, "Number.", "0 | 1 | 299"),
+      f("Case Height? (in)", false, true, "Number.", "0 | 1 | 299"),
+      f("Case Weight? (lbs)", false, true, "Number.", "0 | 1 | 299"),
+      f("Cases Per Layer?", false, true, "Number.", "0 | 1 | 299"),
+      f("Layers Per Pallet?", false, true, "Number.", "0 | 1 | 299"),
+      f("NMFC?", false, true, "A text string.", "12345 | thisisastring"),
+      f("Dimensioned?", false, false, "Boolean TRUE or FALSE.", "TRUE | FALSE"),
+      f("Market Price?", false, false, "Price at market rate. Non-inventory items only.", "true | yes | false | no"),
+      f("Markup %?", false, false, "Markup percent (0–999.99) when Market Price? is enabled. Non-inventory only.", "10 | 15.5")
+    ]
+  },
+  pricing: {
+    label: "Pricing Details",
+    desc: "Add a sales price to a warehouse item.",
+    file: "Template_Pricing_Details.csv",
+    cols: [
+      f("UUID", true, false, "The id of the item we are adding a sales price for.", "22f4c65f-b50f-4b32-a594-28bbfd5f07ce"),
+      f("Name", false, true, "The name of the item we are adding a price for.", "Cold Cup 12oz"),
+      f("Sales Price", true, false, "The price of the item.", "9.99 | 5.13"),
+      f("Warehouse", true, false, "The name of the warehouse.", "NYC1")
+    ]
+  },
+  custom: {
+    label: "Custom Pricing Details",
+    desc: "Add a custom sales price for an item at a specific location.",
+    file: "Template_Custom_Pricing_Details.csv",
+    cols: [
+      f("Item UUID", true, false, "The UUID of the item we are adding a custom sales price for.", "22f4c65f-b50f-4b32-a594-28bbfd5f07ce"),
+      f("Item Name?", false, true, "The name of the item we are adding a custom price for.", "Cold Cup 12oz"),
+      f("Custom Price", true, false, "The custom price of the item.", "9.99 | 5.12"),
+      f("Location UUID", true, false, "The UUID of the location we are adding a custom price for.", "af9f8fc5-3d0f-4fe3-b95c-720f30435298"),
+      f("Location Name?", false, true, "The name of the location we are adding a custom price for.", "Mixtape Bushwick - 1533 Myrtle Avenue")
+    ]
+  },
+  location: {
+    label: "Location Items",
+    desc: "Associate items with locations (or remove the association).",
+    file: "Template_Location_Items.csv",
+    cols: [
+      f("Item UUID", true, false, "The UUID of the item being associated with a location.", "22f4c65f-b50f-4b32-a594-28bbfd5f07ce"),
+      f("Location UUID", true, false, "The UUID of the location.", "af9f8fc5-3d0f-4fe3-b95c-720f30435298"),
+      f("To Remove?", false, false, "Set to remove the item from the location instead of adding it.", "true | false")
+    ]
+  },
+  discontinue: {
+    label: "Discontinue Items",
+    desc: "Discontinue an item from a specific market. Removes it from open orders; an optional replacement is swapped onto customers' order calendars.",
+    file: "Template_Discontinue_Items.csv",
+    cols: [
+      f("Discontinue Item UUID", true, false, "The UUID of the item we are discontinuing.", "22f4c65f-b50f-4b32-a594-28bbfd5f07ce"),
+      f("Market", true, false, "The Name or UUID of the warehouse market to discontinue from.", "EWR1 | 22f4c65f-b50f-4b32-a594-28bbfd5f07ce"),
+      f("Replacement Item UUID?", false, false, "UUID of the replacement item, swapped onto the order calendar.", "22f4c65f-b50f-4b32-a594-28bbfd5f07ce")
+    ]
+  }
+};
+const ORDER = ["item","pricing","custom","location","discontinue"];
+
+/* ---- CSV helpers ---- */
+function parseCSV(text){
+  const rows=[]; let row=[], cur="", q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){
+      if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; }
+      else cur+=c;
+    } else {
+      if(c==='"') q=true;
+      else if(c===',') { row.push(cur); cur=""; }
+      else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=""; }
+      else if(c==='\r'){ /* skip */ }
+      else cur+=c;
+    }
+  }
+  if(cur!==""||row.length){ row.push(cur); rows.push(row); }
+  return rows.filter(r=>r.length>1 || (r.length===1 && r[0].trim()!==""));
+}
+function esc(v){ v=(v==null?"":String(v)); return /[",\n\r]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function norm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+function download(name, text){
+  const blob=new Blob([text],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download=name; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ---- state ---- */
+let currentKey="item";
+let sourceHeaders=[];   // array of header strings
+let sourceRows=[];      // array of arrays (data rows)
+
+/* ---- render ---- */
+const tabsEl=document.getElementById("tabs");
+ORDER.forEach(key=>{
+  const t=TEMPLATES[key];
+  const div=document.createElement("div");
+  div.className="tab"+(key===currentKey?" active":"");
+  div.dataset.key=key;
+  const n=t.cols.filter(c=>!c.spacer).length;
+  div.innerHTML=`<div class="t-name">${t.label}</div><div class="t-meta">${n} columns</div>`;
+  div.onclick=()=>{ currentKey=key; renderTabs(); renderTable(); clearStatus(); };
+  tabsEl.appendChild(div);
+});
+function renderTabs(){
+  [...tabsEl.children].forEach(c=>c.classList.toggle("active", c.dataset.key===currentKey));
+}
+
+function bestMatch(colName){
+  if(!sourceHeaders.length) return "";
+  const target=norm(colName.replace(/\?$/,""));
+  // exact normalized match first
+  let hit=sourceHeaders.find(h=>norm(h)===target);
+  if(hit) return hit;
+  // contains either direction
+  hit=sourceHeaders.find(h=>{const n=norm(h); return n&&(n.includes(target)||target.includes(n));});
+  return hit||"";
+}
+
+function renderTable(){
+  const t=TEMPLATES[currentKey];
+  document.getElementById("map-title").textContent="Map columns → "+t.label;
+  document.getElementById("map-desc").textContent=t.desc;
+  document.getElementById("colcount").textContent=t.cols.filter(c=>!c.spacer).length+" cols";
+  const body=document.getElementById("mapbody");
+  body.innerHTML="";
+  t.cols.forEach((col,idx)=>{
+    if(col.spacer) return; // spacers are kept on export but not shown as mappable
+    const tr=document.createElement("tr");
+
+    const tdName=document.createElement("td");
+    const badges=[];
+    badges.push(col.req?'<span class="badge b-req">Required</span>':'<span class="badge b-opt">Optional</span>');
+    if(col.nul) badges.push('<span class="badge b-null">NULL ok</span>');
+    tdName.innerHTML=`<div class="col-name">${col.name}</div><div style="margin-top:5px">${badges.join(" ")}</div>`;
+
+    const tdSel=document.createElement("td");
+    const sel=document.createElement("select");
+    sel.className="map"; sel.dataset.idx=idx;
+    const auto=bestMatch(col.name);
+    let opts='<option value="">— not mapped —</option>';
+    sourceHeaders.forEach(h=>{ opts+=`<option value="${h.replace(/"/g,'&quot;')}"${h===auto?" selected":""}>${h}</option>`; });
+    sel.innerHTML=opts;
+    sel.onchange=()=>{ sel.classList.remove("empty-required"); refreshPreview(); };
+    tdSel.appendChild(sel);
+    if(auto){ const tag=document.createElement("span"); tag.className="auto-tag"; tag.textContent="● auto"; tdSel.appendChild(tag); }
+
+    const tdDesc=document.createElement("td");
+    tdDesc.innerHTML=`<div class="desc">${col.desc}</div><div class="ex">e.g. ${col.ex}</div>`;
+
+    tr.appendChild(tdName); tr.appendChild(tdSel); tr.appendChild(tdDesc);
+    body.appendChild(tr);
+  });
+  refreshPreview();
+}
+
+/* ---- build output rows from current mapping ---- */
+function buildOutput(){
+  const t=TEMPLATES[currentKey];
+  const header=t.cols.map(c=>c.name);              // includes "" spacers
+  const selects=[...document.querySelectorAll("select.map")];
+  const mapByColIdx={};                              // col index in cols[] -> source header index
+  selects.forEach(s=>{
+    const v=s.value;
+    if(v){ const si=sourceHeaders.indexOf(v); if(si>=0) mapByColIdx[+s.dataset.idx]=si; }
+  });
+  const out=[header];
+  sourceRows.forEach(r=>{
+    const line=t.cols.map((c,i)=>{
+      if(c.spacer) return "";
+      const si=mapByColIdx[i];
+      return si==null ? "" : (r[si]!=null ? r[si] : "");
+    });
+    out.push(line);
+  });
+  return {header, out, mapByColIdx};
+}
+
+function validate(){
+  const t=TEMPLATES[currentKey];
+  const {mapByColIdx}=buildOutput();
+  const errs=[];
+  if(sourceRows.length){
+    t.cols.forEach((c,i)=>{ if(!c.spacer && c.req && mapByColIdx[i]==null) errs.push(`Required column “${c.name}” is not mapped to a source column.`); });
+  }
+  return errs;
+}
+
+function refreshPreview(){
+  const {out}=buildOutput();
+  const info=document.getElementById("rowinfo");
+  if(sourceRows.length) info.textContent=`${sourceRows.length} data row${sourceRows.length===1?"":"s"} ready`;
+  else info.textContent="No source data — export produces a header-only template.";
+  const pv=document.getElementById("preview");
+  const lines=out.slice(0,6).map(r=>r.map(esc).join(","));
+  pv.textContent=lines.join("\n")+(out.length>6?`\n… (${out.length-1} data rows total)`:"");
+}
+
+/* ---- status ---- */
+function clearStatus(){ const s=document.getElementById("status"); s.className="status"; s.innerHTML=""; }
+function showStatus(html){ const s=document.getElementById("status"); s.className="status show"; s.innerHTML=html; }
+
+/* ---- events ---- */
+document.getElementById("srcfile").addEventListener("change",e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const rows=parseCSV(reader.result);
+    if(!rows.length){ showStatus('<span class="err">Could not read any rows from that file.</span>'); return; }
+    sourceHeaders=rows[0].map(h=>h.trim());
+    sourceRows=rows.slice(1);
+    document.getElementById("srcname").textContent=`${file.name} — ${sourceHeaders.length} columns, ${sourceRows.length} rows`;
+    clearStatus();
+    renderTable();
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById("dlblank").addEventListener("click",()=>{
+  const t=TEMPLATES[currentKey];
+  download(t.file, t.cols.map(c=>esc(c.name)).join(",")+"\n");
+});
+
+document.getElementById("export").addEventListener("click",()=>{
+  const errs=validate();
+  if(errs.length){
+    showStatus('<span class="err">Cannot export — fix these first:</span><ul class="val-list">'+errs.map(e=>`<li>${e}</li>`).join("")+"</ul>");
+    // highlight unmapped required selects
+    const t=TEMPLATES[currentKey];
+    document.querySelectorAll("select.map").forEach(s=>{
+      const c=t.cols[+s.dataset.idx];
+      if(c&&c.req&&!s.value) s.classList.add("empty-required");
+    });
+    return;
+  }
+  const t=TEMPLATES[currentKey];
+  const {out}=buildOutput();
+  const csv=out.map(r=>r.map(esc).join(",")).join("\n")+"\n";
+  download(t.file, csv);
+  const n=out.length-1;
+  showStatus(`<span class="ok">✓ Exported ${t.file} — ${n} data row${n===1?"":"s"} in base-template format.</span>`);
+});
+
+document.getElementById("togglePreview").addEventListener("click",()=>{
+  document.getElementById("preview").classList.toggle("show");
+});
+
+/* init */
+renderTable();
+</script>
+</body>
+</html>
