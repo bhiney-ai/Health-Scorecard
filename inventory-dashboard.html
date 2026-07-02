@@ -67,6 +67,8 @@ select.wh-sel:focus{outline:none;border-color:#FFD100;box-shadow:0 0 0 2px rgba(
 table.dt{width:100%;border-collapse:collapse;font-size:12px}
 table.dt th{position:sticky;top:0;background:#F5F0E8;padding:7px 9px;text-align:left;font-weight:600;color:#7A5C4E;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #E8E0D4;cursor:pointer;white-space:nowrap;user-select:none}
 table.dt th:hover{background:#EDE8DC;color:#40180B}
+table.dt th[title]{cursor:help}
+.kpi-card[title]{cursor:help}
 table.dt th.sa::after{content:' ↑'}table.dt th.sd::after{content:' ↓'}
 table.dt td{padding:6px 9px;border-bottom:1px solid #F5F0E8;color:#40180B;white-space:nowrap}
 table.dt tr:hover td{background:#FBF8F3}
@@ -196,9 +198,9 @@ table.dt tr:last-child td{border-bottom:none}
       <div id="dash-content" style="display:none">
         <div class="kpi-grid" id="kpi-grid"></div>
         <div class="charts-row">
-          <div class="chart-card"><div class="chart-title">12-Month Revenue by Category</div><div style="position:relative;height:220px"><canvas id="chart-rev"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">ABC-XYZ Matrix (Item Count)</div><div class="matrix-wrap" id="matrix"></div><div style="margin-top:8px;font-size:10px;color:#94a3b8"><span style="background:#bbf7d0;color:#166534;padding:1px 5px;border-radius:2px">A-X</span> Best &nbsp;<span style="background:#fee2e2;color:#991b1b;padding:1px 5px;border-radius:2px">C-Z</span> Worst</div></div>
-          <div class="chart-card"><div class="chart-title">Recommendation Mix</div><div style="position:relative;height:170px"><canvas id="chart-rec"></canvas></div><div id="rec-legend" style="margin-top:8px;font-size:10px;line-height:1.8"></div></div>
+          <div class="chart-card"><div class="chart-title" title="Invoiced revenue by category, trailing 12 months, active items only" style="cursor:help">12-Month Revenue by Category</div><div style="position:relative;height:220px"><canvas id="chart-rev"></canvas></div></div>
+          <div class="chart-card"><div class="chart-title" title="Items by revenue class (A/B/C) and demand variability (X/Y/Z). A-X = high revenue + steady demand (best). C-Z = low revenue + erratic demand (worst)." style="cursor:help">ABC-XYZ Matrix (Item Count)</div><div class="matrix-wrap" id="matrix"></div><div style="margin-top:8px;font-size:10px;color:#94a3b8"><span style="background:#bbf7d0;color:#166534;padding:1px 5px;border-radius:2px">A-X</span> Best &nbsp;<span style="background:#fee2e2;color:#991b1b;padding:1px 5px;border-radius:2px">C-Z</span> Worst</div></div>
+          <div class="chart-card"><div class="chart-title" title="Active items by scorecard recommendation: KEEP score <40 · WATCH 40–54 · SUNSET ≥55" style="cursor:help">Recommendation Mix</div><div style="position:relative;height:170px"><canvas id="chart-rec"></canvas></div><div id="rec-legend" style="margin-top:8px;font-size:10px;line-height:1.8"></div></div>
         </div>
         <div class="two-col">
           <div class="table-card">
@@ -819,12 +821,12 @@ function renderDashboard(){
   const label=S.cfg.label||new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
 
   document.getElementById('kpi-grid').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Total SKUs</div><div class="kpi-value">${$int(totalSKUs)}</div><div class="kpi-sub">${S.wh} · ${label}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Active SKUs</div><div class="kpi-value">${$int(activeSKUs)}</div><div class="kpi-sub">${$pct(activeSKUs/totalSKUs)} of catalog</div></div>
-    <div class="kpi-card"><div class="kpi-label">Inventory Value</div><div class="kpi-value" style="font-size:18px">${$m(totalCost)}</div><div class="kpi-sub">On-hand cost</div></div>
-    <div class="kpi-card"><div class="kpi-label">12-Mo Revenue</div><div class="kpi-value" style="font-size:18px">${$m(totalRev)}</div><div class="kpi-sub">Invoiced amount</div></div>
-    <div class="kpi-card"><div class="kpi-label">Overstocked</div><div class="kpi-value">${$int(overstocked)}</div><div class="kpi-sub" style="color:#dc2626">DIO &gt; 180 days</div></div>
-    <div class="kpi-card"><div class="kpi-label">Inactive w/ Stock</div><div class="kpi-value" style="font-size:18px">${$m(strandedCost)}</div><div class="kpi-sub" style="color:#dc2626">Stranded cost</div></div>`;
+    <div class="kpi-card" title="Every SKU at this warehouse, including Inactive and No Data items"><div class="kpi-label">Total SKUs</div><div class="kpi-value">${$int(totalSKUs)}</div><div class="kpi-sub">${S.wh} · ${label}</div></div>
+    <div class="kpi-card" title="Active-status SKUs with 12-month revenue or at least one ordering customer"><div class="kpi-label">Active SKUs</div><div class="kpi-value">${$int(activeSKUs)}</div><div class="kpi-sub">${$pct(activeSKUs/totalSKUs)} of catalog</div></div>
+    <div class="kpi-card" title="Sum of on-hand inventory at cost across active items"><div class="kpi-label">Inventory Value</div><div class="kpi-value" style="font-size:18px">${$m(totalCost)}</div><div class="kpi-sub">On-hand cost</div></div>
+    <div class="kpi-card" title="Sum of invoiced revenue across active items, trailing 12 months"><div class="kpi-label">12-Mo Revenue</div><div class="kpi-value" style="font-size:18px">${$m(totalRev)}</div><div class="kpi-sub">Invoiced amount</div></div>
+    <div class="kpi-card" title="Active items with Days Inventory Outstanding over 180 — more than 6 months of stock on hand"><div class="kpi-label">Overstocked</div><div class="kpi-value">${$int(overstocked)}</div><div class="kpi-sub" style="color:#dc2626">DIO &gt; 180 days</div></div>
+    <div class="kpi-card" title="On-hand cost tied up in Inactive (removed from catalog) items — stranded dollars. See the Inactive tab."><div class="kpi-label">Inactive w/ Stock</div><div class="kpi-value" style="font-size:18px">${$m(strandedCost)}</div><div class="kpi-sub" style="color:#dc2626">Stranded cost</div></div>`;
 
   // Matrix
   const mx={A:{X:0,Y:0,Z:0},B:{X:0,Y:0,Z:0},C:{X:0,Y:0,Z:0}};
@@ -832,11 +834,11 @@ function renderDashboard(){
   const tX=mx.A.X+mx.B.X+mx.C.X,tY=mx.A.Y+mx.B.Y+mx.C.Y,tZ=mx.A.Z+mx.B.Z+mx.C.Z;
   const tA=mx.A.X+mx.A.Y+mx.A.Z,tB=mx.B.X+mx.B.Y+mx.B.Z,tC=mx.C.X+mx.C.Y+mx.C.Z;
   document.getElementById('matrix').innerHTML=`<table>
-    <thead><tr><th></th><th>X — Steady</th><th>Y — Moderate</th><th>Z — Volatile</th><th>Total</th></tr></thead>
+    <thead><tr><th></th><th title="Steady, predictable demand (low coefficient of variation)" style="cursor:help">X — Steady</th><th title="Moderate demand variability" style="cursor:help">Y — Moderate</th><th title="Volatile, erratic demand (high coefficient of variation)" style="cursor:help">Z — Volatile</th><th>Total</th></tr></thead>
     <tbody>
-      <tr><td class="rl">A — High</td><td class="ax">${mx.A.X}</td><td class="ay">${mx.A.Y}</td><td class="az">${mx.A.Z}</td><td class="ct">${tA}</td></tr>
-      <tr><td class="rl">B — Mid</td><td class="bx">${mx.B.X}</td><td class="by">${mx.B.Y}</td><td class="bz">${mx.B.Z}</td><td class="ct">${tB}</td></tr>
-      <tr><td class="rl">C — Low</td><td class="cx">${mx.C.X}</td><td class="cy">${mx.C.Y}</td><td class="cz">${mx.C.Z}</td><td class="ct">${tC}</td></tr>
+      <tr><td class="rl" title="A-class: top 80% of category revenue" style="cursor:help">A — High</td><td class="ax">${mx.A.X}</td><td class="ay">${mx.A.Y}</td><td class="az">${mx.A.Z}</td><td class="ct">${tA}</td></tr>
+      <tr><td class="rl" title="B-class: next 15% of category revenue" style="cursor:help">B — Mid</td><td class="bx">${mx.B.X}</td><td class="by">${mx.B.Y}</td><td class="bz">${mx.B.Z}</td><td class="ct">${tB}</td></tr>
+      <tr><td class="rl" title="C-class: last 5% of category revenue" style="cursor:help">C — Low</td><td class="cx">${mx.C.X}</td><td class="cy">${mx.C.Y}</td><td class="cz">${mx.C.Z}</td><td class="ct">${tC}</td></tr>
       <tr><td class="rl">Total</td><td class="ct">${tX}</td><td class="ct">${tY}</td><td class="ct">${tZ}</td><td class="ct" style="font-weight:700">${tX+tY+tZ}</td></tr>
     </tbody></table>`;
 
@@ -864,7 +866,7 @@ function renderDashboard(){
   const abcDist={A:{skus:0,cost:0,rev:0,gmroi:[]},B:{skus:0,cost:0,rev:0,gmroi:[]},C:{skus:0,cost:0,rev:0,gmroi:[]}};
   AJ.forEach(r=>{const d=abcDist[r.catABC];if(!d)return;d.skus++;d.cost+=r.ohCost;d.rev+=r.rev12mo;if(r.gmroi)d.gmroi.push(r.gmroi);});
   const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
-  document.getElementById('abc-dist').innerHTML=`<thead><tr><th>Class</th><th class="tr">SKUs</th><th class="tr">OH Cost</th><th class="tr">12-Mo Rev</th><th class="tr">Rev %</th><th class="tr">Avg GMROI</th></tr></thead><tbody>`+
+  document.getElementById('abc-dist').innerHTML=`<thead><tr><th title="Revenue class: A = top 80% of cumulative category revenue, B = next 15%, C = last 5%" style="cursor:help">Class</th><th class="tr" title="Active SKUs in this class" style="cursor:help">SKUs</th><th class="tr" title="On-hand inventory at cost" style="cursor:help">OH Cost</th><th class="tr" title="Invoiced revenue, trailing 12 months" style="cursor:help">12-Mo Rev</th><th class="tr" title="Share of total warehouse revenue" style="cursor:help">Rev %</th><th class="tr" title="Average Gross Margin Return on Inventory" style="cursor:help">Avg GMROI</th></tr></thead><tbody>`+
     ['A','B','C'].map(cls=>{const d=abcDist[cls];return `<tr><td>${abcBadge(cls)}</td><td class="tr num">${d.skus}</td><td class="tr num">${$m(d.cost)}</td><td class="tr num">${$m(d.rev)}</td><td class="tr num">${$pct(totalRev?d.rev/totalRev:0)}</td><td class="tr num">${$fix(avg(d.gmroi))}</td></tr>`;}).join('')+'</tbody>';
 
   // Category performance — aggregate components first, then derive ratios
@@ -889,7 +891,7 @@ function renderDashboard(){
     <td class="tr num">${catITO>0?$fix(catITO):'—'}</td><td class="tr num">${catDIO>0?$fix(catDIO,0):'—'}</td><td class="tr num">${catGMROI?$fix(catGMROI):'—'}</td>
     <td class="tr"><span class="rec rk">${d.keep}</span> <span class="rec rw">${d.watch}</span> <span class="rec rs">${d.sunset}</span></td>
   </tr>`;}).join('');
-  document.getElementById('cat-tbl').innerHTML=`<thead><tr><th>Category</th><th class="tr">SKUs</th><th class="tr">Revenue</th><th class="tr">OH Cost</th><th class="tr">ITO</th><th class="tr">DIO</th><th class="tr">GMROI</th><th class="tr">K/W/S</th></tr></thead><tbody>${catRows}</tbody>`;
+  document.getElementById('cat-tbl').innerHTML=`<thead><tr><th title="Item category" style="cursor:help">Category</th><th class="tr" title="Active SKUs in category" style="cursor:help">SKUs</th><th class="tr" title="Invoiced revenue, trailing 12 months" style="cursor:help">Revenue</th><th class="tr" title="On-hand inventory at cost" style="cursor:help">OH Cost</th><th class="tr" title="Category inventory turns per year — aggregated totals, not an average of item ITOs" style="cursor:help">ITO</th><th class="tr" title="Category Days Inventory Outstanding = total avg inventory × 182 ÷ total 6-month COGS — aggregated, not an average of item DIOs" style="cursor:help">DIO</th><th class="tr" title="Category GMROI = (total net revenue − total COGS) ÷ total avg inventory" style="cursor:help">GMROI</th><th class="tr" title="Count of KEEP / WATCH / SUNSET recommendations" style="cursor:help">K/W/S</th></tr></thead><tbody>${catRows}</tbody>`;
 }
 function destroyChart(id){if(S.charts[id]){S.charts[id].destroy();delete S.charts[id];}}
 
@@ -901,7 +903,7 @@ function makeTable(tblId,countId,cols,rows,sortState){
   const thead=tbl.querySelector('thead');
   const tbody=tbl.querySelector('tbody');
   if(!thead.innerHTML){
-    thead.innerHTML='<tr>'+cols.map(c=>`<th data-col="${c.label}"${c.w?` style="min-width:${c.w}"`:''}>${c.label}</th>`).join('')+'</tr>';
+    thead.innerHTML='<tr>'+cols.map(c=>`<th data-col="${c.label}"${c.tip?` title="${c.tip}"`:''}${c.w?` style="min-width:${c.w}"`:''}>${c.label}</th>`).join('')+'</tr>';
     thead.querySelectorAll('th').forEach(th=>{
       th.addEventListener('click',()=>{
         const lbl=th.dataset.col;
@@ -936,29 +938,29 @@ function sortRows(rows,cols,sortState){
 
 // ─── SCORE ENGINE ─────────────────────────────────────────────
 const SE_COLS=[
-  {label:'Item ID',   val:r=>r.id,   render:r=>`<td>${r.id}</td>`},
-  {label:'Brand',     val:r=>r.brand,render:r=>`<td>${r.brand||'—'}</td>`},
-  {label:'Item Name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
-  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
-  {label:'Status',    val:r=>r.status, render:r=>`<td>${statusBadge(r.status)}</td>`},
-  {label:'Days Active',val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):'—'}</td>`},
-  {label:'ABC',       val:r=>r.catABC, render:r=>`<td>${abcBadge(r.catABC)}</td>`},
-  {label:'Sub ABC',   val:r=>r.subCatABC, render:r=>`<td>${abcBadge(r.subCatABC)}</td>`},
-  {label:'XYZ',       val:r=>r.xyzClass, render:r=>`<td>${xyzBadge(r.xyzClass)}</td>`},
-  {label:'DIO',       val:r=>r.dio, render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
-  {label:'ITO',       val:r=>r.ito, render:r=>`<td class="tr num">${$fix(r.ito)}</td>`},
-  {label:'GMROI',     val:r=>r.gmroi, render:r=>`<td class="tr num">${$fix(r.gmroi)}</td>`},
-  {label:'Margin%',   val:r=>r.marginPct, render:r=>`<td class="tr num">${$pct(r.marginPct)}</td>`},
-  {label:'12-Mo Rev', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
-  {label:'OH Cost',   val:r=>r.ohCost, render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
-  {label:'Customers', val:r=>r.numCust, render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
-  {label:'DIO Sc',    val:r=>r.dioSc, render:r=>`<td class="tr num">${r.total!==null?r.dioSc:'—'}</td>`},
-  {label:'ABC Sc',    val:r=>r.abcSc, render:r=>`<td class="tr num">${r.total!==null?r.abcSc:'—'}</td>`},
-  {label:'Velo Sc',   val:r=>r.veloSc, render:r=>`<td class="tr num">${r.total!==null?r.veloSc:'—'}</td>`},
-  {label:'Cust Sc',   val:r=>r.custSc, render:r=>`<td class="tr num">${r.total!==null?r.custSc:'—'}</td>`},
-  {label:'GMROI Sc',  val:r=>r.gmroiSc, render:r=>`<td class="tr num">${r.total!==null?r.gmroiSc:'—'}</td>`},
-  {label:'Score',     val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?(r.scoredMax<100?`<span title="Normalized: no inventory data — scored on ${r.scoredMax} available pts">${r.total}*</span>`:r.total):'—'}</td>`},
-  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}</td>`},
+  {label:'Item ID',   tip:'NetSuite item ID', val:r=>r.id,   render:r=>`<td>${r.id}</td>`},
+  {label:'Brand',     tip:'Catalog brand', val:r=>r.brand,render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Item Name', tip:'Catalog item name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Category',  tip:'Item category', val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Status',    tip:'Active = in procurement catalog. Inactive = removed from catalog. New To Market = first delivery under 90 days ago (not scored). No Data = in catalog but no signal in any source.', val:r=>r.status, render:r=>`<td>${statusBadge(r.status)}</td>`},
+  {label:'Days Active',tip:'Days since first delivery at this warehouse', val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):'—'}</td>`},
+  {label:'ABC',       tip:'Revenue class within warehouse + category: A = top 80% of cumulative revenue, B = next 15%, C = last 5%', val:r=>r.catABC, render:r=>`<td>${abcBadge(r.catABC)}</td>`},
+  {label:'Sub ABC',   tip:'ABC class computed within the item sub-category', val:r=>r.subCatABC, render:r=>`<td>${abcBadge(r.subCatABC)}</td>`},
+  {label:'XYZ',       tip:'Demand variability from coefficient of variation: X = steady, Y = moderate, Z = volatile/erratic', val:r=>r.xyzClass, render:r=>`<td>${xyzBadge(r.xyzClass)}</td>`},
+  {label:'DIO',       tip:'Days Inventory Outstanding = avg inventory value × 182 ÷ 6-month COGS (fallback: × 30 ÷ last-month usage). Higher = slower moving. Capped at 9999 = dead stock.', val:r=>r.dio, render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+  {label:'ITO',       tip:'Inventory turns per year = annualized COGS ÷ average inventory value', val:r=>r.ito, render:r=>`<td class="tr num">${$fix(r.ito)}</td>`},
+  {label:'GMROI',     tip:'Gross Margin Return on Inventory = (net revenue − COGS) ÷ avg inventory value, 6-month window. Under 1.0 = inventory returns less than it costs.', val:r=>r.gmroi, render:r=>`<td class="tr num">${$fix(r.gmroi)}</td>`},
+  {label:'Margin%',   tip:'6-month average margin from customer margin data', val:r=>r.marginPct, render:r=>`<td class="tr num">${$pct(r.marginPct)}</td>`},
+  {label:'12-Mo Rev', tip:'Invoiced amount, trailing 12 months', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
+  {label:'OH Cost',   tip:'Current on-hand inventory at cost', val:r=>r.ohCost, render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
+  {label:'Customers', tip:'Distinct ordering customers, trailing 6 months', val:r=>r.numCust, render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
+  {label:'DIO Sc',    tip:'DIO penalty, 0–30: >365d=30 · >180=25 · >90=18 · >60=10 · >30=5 · ≤30=0', val:r=>r.dioSc, render:r=>`<td class="tr num">${r.total!==null?r.dioSc:'—'}</td>`},
+  {label:'ABC Sc',    tip:'ABC penalty, 0–25: C=25 · B=10 · A=0', val:r=>r.abcSc, render:r=>`<td class="tr num">${r.total!==null?r.abcSc:'—'}</td>`},
+  {label:'Velo Sc',   tip:'Velocity penalty, 0–20, from ratio of recent 3-mo avg units ÷ prior 9-mo avg: no data=20 · ≤2x=12 · ≤5x=9 · ≤10x=5 · ≤20x=2 · >20x=0', val:r=>r.veloSc, render:r=>`<td class="tr num">${r.total!==null?r.veloSc:'—'}</td>`},
+  {label:'Cust Sc',   tip:'Customer penalty, 0–15: 0 cust=15 · ≤2=12 · ≤5=9 · ≤10=5 · ≤20=2 · >20=0', val:r=>r.custSc, render:r=>`<td class="tr num">${r.total!==null?r.custSc:'—'}</td>`},
+  {label:'GMROI Sc',  tip:'GMROI penalty, 0–10: <0.5=10 · <1=8 · <1.5=5 · <2=3 · <3=1 · ≥3=0. Not scored without inventory + cost data.', val:r=>r.gmroiSc, render:r=>`<td class="tr num">${r.total!==null?r.gmroiSc:'—'}</td>`},
+  {label:'Score',     tip:'Total penalty score 0–100, normalized to the points available for this item (* = missing inventory data, scored on fewer points). Higher = worse.', val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?(r.scoredMax<100?`<span title="Normalized: no inventory data — scored on ${r.scoredMax} available pts">${r.total}*</span>`:r.total):'—'}</td>`},
+  {label:'Rec',       tip:'KEEP <40 · WATCH 40–54 · SUNSET ≥55', val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}</td>`},
 ];
 function getSERows(){
   const q=document.getElementById('se-q')?.value.toLowerCase()||'';
@@ -993,22 +995,22 @@ document.getElementById('se-clear').onclick=()=>{
 
 // ─── ON HAND ──────────────────────────────────────────────────
 const OH_COLS=[
-  {label:'Item ID',   val:r=>r.id,    render:r=>`<td>${r.id}</td>`},
-  {label:'Item Name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
-  {label:'Brand',     val:r=>r.brand, render:r=>`<td>${r.brand||'—'}</td>`},
-  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
-  {label:'Sub Cat',   val:r=>r.subCat,  render:r=>`<td>${r.subCat||'—'}</td>`},
-  {label:'Unit',      val:r=>r.saleUnit, render:r=>`<td>${r.saleUnit||'—'}</td>`},
-  {label:'QOH',       val:r=>r.qoh,   render:r=>`<td class="tr num">${$int(r.qoh)}</td>`},
-  {label:'30-Day Cons',val:r=>r.cons30,render:r=>`<td class="tr num">${r.cons30?$int(r.cons30):'—'}</td>`},
-  {label:'60-Day Cons',val:r=>r.cons60,render:r=>`<td class="tr num">${r.cons60?$int(r.cons60):'—'}</td>`},
-  {label:'On Order',  val:r=>r.onOrder,render:r=>`<td class="tr num">${r.onOrder?$int(r.onOrder):'—'}</td>`},
-  {label:'Avg Cost',  val:r=>r.avgCostEa,render:r=>`<td class="tr num">${$m2(r.avgCostEa)}</td>`},
-  {label:'OH Cost',   val:r=>r.ohCost, render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
-  {label:'Inv+Pipe',  val:r=>r.invPipe,render:r=>`<td class="tr num">${r.invPipe?$int(r.invPipe):'—'}</td>`},
-  {label:'Total Value',val:r=>r.totalVal,render:r=>`<td class="tr num">${$m(r.totalVal)}</td>`},
-  {label:'DIO',       val:r=>r.dio,   render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
-  {label:'Days Active',val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):r.status==='New To Market'?'<span class="rec rntm">NEW</span>':'—'}</td>`},
+  {label:'Item ID',   tip:'NetSuite item ID', val:r=>r.id,    render:r=>`<td>${r.id}</td>`},
+  {label:'Item Name', tip:'Catalog item name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Brand',     tip:'Catalog brand', val:r=>r.brand, render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Category',  tip:'Item category', val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Sub Cat',   tip:'Item sub-category', val:r=>r.subCat,  render:r=>`<td>${r.subCat||'—'}</td>`},
+  {label:'Unit',      tip:'Sale / purchase unit', val:r=>r.saleUnit, render:r=>`<td>${r.saleUnit||'—'}</td>`},
+  {label:'QOH',       tip:'Quantity on hand in purchase units (eaches ÷ unit conversion rate)', val:r=>r.qoh,   render:r=>`<td class="tr num">${$int(r.qoh)}</td>`},
+  {label:'30-Day Cons',tip:'Consumption last 30 days, purchase units', val:r=>r.cons30,render:r=>`<td class="tr num">${r.cons30?$int(r.cons30):'—'}</td>`},
+  {label:'60-Day Cons',tip:'Consumption last 60 days, purchase units', val:r=>r.cons60,render:r=>`<td class="tr num">${r.cons60?$int(r.cons60):'—'}</td>`},
+  {label:'On Order',  tip:'Open PO quantity in purchase units', val:r=>r.onOrder,render:r=>`<td class="tr num">${r.onOrder?$int(r.onOrder):'—'}</td>`},
+  {label:'Avg Cost',  tip:'Average cost per each', val:r=>r.avgCostEa,render:r=>`<td class="tr num">${$m2(r.avgCostEa)}</td>`},
+  {label:'OH Cost',   tip:'Total on-hand inventory at cost', val:r=>r.ohCost, render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
+  {label:'Inv+Pipe',  tip:'QOH + on order, purchase units', val:r=>r.invPipe,render:r=>`<td class="tr num">${r.invPipe?$int(r.invPipe):'—'}</td>`},
+  {label:'Total Value',tip:'(QOH + on order) × purchase-unit cost', val:r=>r.totalVal,render:r=>`<td class="tr num">${$m(r.totalVal)}</td>`},
+  {label:'DIO',       tip:'Days Inventory Outstanding = avg inventory value × 182 ÷ 6-month COGS. Higher = slower moving.', val:r=>r.dio,   render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+  {label:'Days Active',tip:'Days since first delivery at this warehouse', val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):r.status==='New To Market'?'<span class="rec rntm">NEW</span>':'—'}</td>`},
 ];
 function getOHRows(){
   const q=document.getElementById('oh-q')?.value.toLowerCase()||'';
@@ -1037,24 +1039,24 @@ document.getElementById('oh-clear').onclick=()=>{
 
 // ─── BRAND EVAL ───────────────────────────────────────────────
 const BE_COLS=[
-  {label:'Brand',     val:r=>r.brand,   w:'160px', render:r=>`<td style="min-width:160px;font-weight:600">${r.brand||'—'}</td>`},
-  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
-  {label:'SKUs',      val:r=>r.skus,   render:r=>`<td class="tr num">${r.skus}</td>`},
-  {label:'12-Mo Rev', val:r=>r.rev,    render:r=>`<td class="tr num">${$m(r.rev)}</td>`},
-  {label:'OH Cost',   val:r=>r.cost,   render:r=>`<td class="tr num">${$m(r.cost)}</td>`},
-  {label:'A-Class',   val:r=>r.aClass, render:r=>`<td class="tr num">${r.aClass}</td>`},
-  {label:'B-Class',   val:r=>r.bClass, render:r=>`<td class="tr num">${r.bClass}</td>`},
-  {label:'C-Class',   val:r=>r.cClass, render:r=>`<td class="tr num">${r.cClass}</td>`},
-  {label:'X-Class',   val:r=>r.xClass, render:r=>`<td class="tr num">${r.xClass}</td>`},
-  {label:'Z-Class',   val:r=>r.zClass, render:r=>`<td class="tr num">${r.zClass}</td>`},
-  {label:'Avg DIO',   val:r=>r.avgDIO, render:r=>`<td class="tr num">${$fix(r.avgDIO,0)}</td>`},
-  {label:'Margin%',val:r=>r.blendedMargin,render:r=>`<td class="tr num">${$pct(r.blendedMargin)}</td>`},
-  {label:'Avg GMROI', val:r=>r.avgGMROI,render:r=>`<td class="tr num">${$fix(r.avgGMROI)}</td>`},
-  {label:'Sunset SKUs',val:r=>r.sunsetSkus,render:r=>`<td class="tr num">${r.sunsetSkus}</td>`},
-  {label:'% Sunset',  val:r=>r.pctSunset,render:r=>`<td class="tr num">${$pct(r.pctSunset)}</td>`},
-  {label:'Rev Retention',val:r=>r.revRetPct,render:r=>`<td class="tr num">${$pct(r.revRetPct)}</td>`},
-  {label:'Cust Impacted',val:r=>r.custImpacted,render:r=>`<td class="tr num">${r.custImpacted}</td>`},
-  {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${brandRecBadge(r.recommendation)}</td>`},
+  {label:'Brand',     tip:'Catalog brand — one row per brand per warehouse', val:r=>r.brand,   w:'160px', render:r=>`<td style="min-width:160px;font-weight:600">${r.brand||'—'}</td>`},
+  {label:'Category',  tip:'Primary category (most SKUs), or Multiple if the brand spans categories', val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'SKUs',      tip:'Active + New To Market SKUs at this warehouse (Inactive/No Data excluded)', val:r=>r.skus,   render:r=>`<td class="tr num">${r.skus}</td>`},
+  {label:'12-Mo Rev', tip:'Sum of invoiced revenue, trailing 12 months', val:r=>r.rev,    render:r=>`<td class="tr num">${$m(r.rev)}</td>`},
+  {label:'OH Cost',   tip:'Sum of on-hand inventory at cost', val:r=>r.cost,   render:r=>`<td class="tr num">${$m(r.cost)}</td>`},
+  {label:'A-Class',   tip:'Count of A-class SKUs (top 80% of category revenue)', val:r=>r.aClass, render:r=>`<td class="tr num">${r.aClass}</td>`},
+  {label:'B-Class',   tip:'Count of B-class SKUs (next 15% of category revenue)', val:r=>r.bClass, render:r=>`<td class="tr num">${r.bClass}</td>`},
+  {label:'C-Class',   tip:'Count of C-class SKUs (last 5% of category revenue)', val:r=>r.cClass, render:r=>`<td class="tr num">${r.cClass}</td>`},
+  {label:'X-Class',   tip:'Count of X-class SKUs (steady demand)', val:r=>r.xClass, render:r=>`<td class="tr num">${r.xClass}</td>`},
+  {label:'Z-Class',   tip:'Count of Z-class SKUs (volatile demand)', val:r=>r.zClass, render:r=>`<td class="tr num">${r.zClass}</td>`},
+  {label:'Avg DIO',   tip:'Average Days Inventory Outstanding across the brand&#39;s SKUs with inventory', val:r=>r.avgDIO, render:r=>`<td class="tr num">${$fix(r.avgDIO,0)}</td>`},
+  {label:'Margin%',   tip:'Blended margin = (total revenue − total COGS) ÷ total revenue, 6-month window', val:r=>r.blendedMargin,render:r=>`<td class="tr num">${$pct(r.blendedMargin)}</td>`},
+  {label:'Avg GMROI', tip:'Average Gross Margin Return on Inventory across SKUs with data', val:r=>r.avgGMROI,render:r=>`<td class="tr num">${$fix(r.avgGMROI)}</td>`},
+  {label:'Sunset SKUs',tip:'SKUs currently scoring SUNSET (score ≥55)', val:r=>r.sunsetSkus,render:r=>`<td class="tr num">${r.sunsetSkus}</td>`},
+  {label:'% Sunset',  tip:'Share of the brand&#39;s SKUs scoring SUNSET', val:r=>r.pctSunset,render:r=>`<td class="tr num">${$pct(r.pctSunset)}</td>`},
+  {label:'Rev Retention',tip:'Share of brand revenue kept if all SUNSET SKUs were cut', val:r=>r.revRetPct,render:r=>`<td class="tr num">${$pct(r.revRetPct)}</td>`},
+  {label:'Cust Impacted',tip:'Customers currently ordering the SUNSET SKUs', val:r=>r.custImpacted,render:r=>`<td class="tr num">${r.custImpacted}</td>`},
+  {label:'Rec',       tip:'EXIT BRAND: rev <$1K, or ≥60% sunset & rev <$50K, or no A-class & rev <$20K · MOQ REVIEW: avg DIO >150 · TRIM TAIL: ≥25% sunset with A-class anchor · KEEP—Strategic: rev >$200K with A-class · MONITOR: everything else', val:r=>r.recommendation, render:r=>`<td>${brandRecBadge(r.recommendation)}</td>`},
 ];
 function getBERows(){
   const q=document.getElementById('be-q')?.value.toLowerCase()||'';
@@ -1082,25 +1084,25 @@ document.getElementById('be-clear').onclick=()=>{
 
 // ─── SUMMARY ──────────────────────────────────────────────────
 const SUM_COLS=[
-  {label:'Item ID',   val:r=>r.id,    render:r=>`<td>${r.id}</td>`},
-  {label:'Brand',     val:r=>r.brand, render:r=>`<td>${r.brand||'—'}</td>`},
-  {label:'Item Name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
-  {label:'Category',  val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
-  {label:'Sub Cat',   val:r=>r.subCat,  render:r=>`<td>${r.subCat||'—'}</td>`},
-  {label:'Status',    val:r=>r.status,  render:r=>`<td>${r.status||'—'}</td>`},
-  {label:'OH Cost',   val:r=>r.ohCost,  render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
-  {label:'12-Mo Rev', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
-  {label:'ABC',       val:r=>r.catABC,  render:r=>`<td>${abcBadge(r.catABC)}</td>`},
-  {label:'Sub ABC',   val:r=>r.subCatABC, render:r=>`<td>${abcBadge(r.subCatABC)}</td>`},
-  {label:'XYZ',       val:r=>r.xyzClass, render:r=>`<td>${xyzBadge(r.xyzClass)}</td>`},
-  {label:'Units Sold',val:r=>r.units12mo, render:r=>`<td class="tr num">${$int(r.units12mo)}</td>`},
-  {label:'Customers', val:r=>r.numCust,  render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
-  {label:'Cust %',    val:r=>r.custPct,  render:r=>`<td class="tr num">${$pct(r.custPct)}</td>`},
-  {label:'Cat Cust%', val:r=>r.custCatPct, render:r=>`<td class="tr num">${$pct(r.custCatPct)}</td>`},
-  {label:'Margin%',   val:r=>r.marginPct, render:r=>`<td class="tr num">${$pct(r.marginPct)}</td>`},
-  {label:'ITO',       val:r=>r.ito,    render:r=>`<td class="tr num">${$fix(r.ito)}</td>`},
-  {label:'DIO',       val:r=>r.dio,    render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
-  {label:'GMROI',     val:r=>r.gmroi,  render:r=>`<td class="tr num">${$fix(r.gmroi)}</td>`},
+  {label:'Item ID',   tip:'NetSuite item ID', val:r=>r.id,    render:r=>`<td>${r.id}</td>`},
+  {label:'Brand',     tip:'Catalog brand', val:r=>r.brand, render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Item Name', tip:'Catalog item name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Category',  tip:'Item category', val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Sub Cat',   tip:'Item sub-category', val:r=>r.subCat,  render:r=>`<td>${r.subCat||'—'}</td>`},
+  {label:'Status',    tip:'Active / New To Market (<90 days). Inactive and No Data items live in the Inactive tab.', val:r=>r.status,  render:r=>`<td>${r.status||'—'}</td>`},
+  {label:'OH Cost',   tip:'Current on-hand inventory at cost', val:r=>r.ohCost,  render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
+  {label:'12-Mo Rev', tip:'Invoiced amount, trailing 12 months', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
+  {label:'ABC',       tip:'Revenue class: A = top 80% of category revenue, B = next 15%, C = last 5%', val:r=>r.catABC,  render:r=>`<td>${abcBadge(r.catABC)}</td>`},
+  {label:'Sub ABC',   tip:'ABC class within sub-category', val:r=>r.subCatABC, render:r=>`<td>${abcBadge(r.subCatABC)}</td>`},
+  {label:'XYZ',       tip:'Demand variability: X = steady, Y = moderate, Z = volatile', val:r=>r.xyzClass, render:r=>`<td>${xyzBadge(r.xyzClass)}</td>`},
+  {label:'Units Sold',tip:'Invoiced sales units, trailing 12 months', val:r=>r.units12mo, render:r=>`<td class="tr num">${$int(r.units12mo)}</td>`},
+  {label:'Customers', tip:'Distinct ordering customers, trailing 6 months', val:r=>r.numCust,  render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
+  {label:'Cust %',    tip:'Share of all warehouse customers ordering this item', val:r=>r.custPct,  render:r=>`<td class="tr num">${$pct(r.custPct)}</td>`},
+  {label:'Cat Cust%', tip:'Item&#39;s share of customer orders within its category', val:r=>r.custCatPct, render:r=>`<td class="tr num">${$pct(r.custCatPct)}</td>`},
+  {label:'Margin%',   tip:'6-month average margin', val:r=>r.marginPct, render:r=>`<td class="tr num">${$pct(r.marginPct)}</td>`},
+  {label:'ITO',       tip:'Inventory turns per year = annualized COGS ÷ avg inventory value', val:r=>r.ito,    render:r=>`<td class="tr num">${$fix(r.ito)}</td>`},
+  {label:'DIO',       tip:'Days Inventory Outstanding = avg inventory × 182 ÷ 6-month COGS. Higher = slower.', val:r=>r.dio,    render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+  {label:'GMROI',     tip:'Gross Margin Return on Inventory = (net revenue − COGS) ÷ avg inventory', val:r=>r.gmroi,  render:r=>`<td class="tr num">${$fix(r.gmroi)}</td>`},
 ];
 function getSumRows(){
   const q=document.getElementById('sum-q')?.value.toLowerCase()||'';
@@ -1131,19 +1133,19 @@ document.getElementById('sum-clear').onclick=()=>{
 
 // ─── INACTIVE ─────────────────────────────────────────────────
 const IN_COLS=[
-  {label:'Item ID',    val:r=>r.id,        render:r=>`<td>${r.id}</td>`},
-  {label:'Brand',      val:r=>r.brand,     render:r=>`<td>${r.brand||'—'}</td>`},
-  {label:'Item Name',  val:r=>r.itemName,  w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
-  {label:'Category',   val:r=>r.category,  render:r=>`<td>${r.category||'—'}</td>`},
-  {label:'Sub Cat',    val:r=>r.subCat,    render:r=>`<td>${r.subCat||'—'}</td>`},
-  {label:'Status',     val:r=>r.status,    render:r=>`<td>${statusBadge(r.status)}</td>`},
-  {label:'Days Active',val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):'—'}</td>`},
-  {label:'QOH',        val:r=>r.qoh,       render:r=>`<td class="tr num">${r.qoh>0?$int(r.qoh):'—'}</td>`},
-  {label:'On Order',   val:r=>r.onOrder,   render:r=>`<td class="tr num">${r.onOrder>0?$int(r.onOrder):'—'}</td>`},
-  {label:'Avg Cost',   val:r=>r.avgCostEa, render:r=>`<td class="tr num">${r.avgCostEa>0?$m2(r.avgCostEa):'—'}</td>`},
-  {label:'OH Cost',    val:r=>r.ohCost,    render:r=>`<td class="tr num">${r.ohCost>0?$m(r.ohCost):'—'}</td>`},
-  {label:'12-Mo Rev',  val:r=>r.rev12mo,   render:r=>`<td class="tr num">${r.rev12mo>0?$m(r.rev12mo):'—'}</td>`},
-  {label:'Customers',  val:r=>r.numCust,   render:r=>`<td class="tr num">${r.numCust>0?$int(r.numCust):'—'}</td>`},
+  {label:'Item ID',    tip:'NetSuite item ID', val:r=>r.id,        render:r=>`<td>${r.id}</td>`},
+  {label:'Brand',      tip:'Catalog brand', val:r=>r.brand,     render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Item Name',  tip:'Catalog item name', val:r=>r.itemName,  w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Category',   tip:'Item category', val:r=>r.category,  render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Sub Cat',    tip:'Item sub-category', val:r=>r.subCat,    render:r=>`<td>${r.subCat||'—'}</td>`},
+  {label:'Status',     tip:'Inactive = removed from procurement catalog. No Data = in catalog but no signal in any data source.', val:r=>r.status,    render:r=>`<td>${statusBadge(r.status)}</td>`},
+  {label:'Days Active',tip:'Days since first delivery at this warehouse', val:r=>r.daysActive,render:r=>`<td class="tr num">${r.daysActive>0?$int(r.daysActive):'—'}</td>`},
+  {label:'QOH',        tip:'Quantity on hand in purchase units — stranded stock if Inactive', val:r=>r.qoh,       render:r=>`<td class="tr num">${r.qoh>0?$int(r.qoh):'—'}</td>`},
+  {label:'On Order',   tip:'Open PO quantity in purchase units', val:r=>r.onOrder,   render:r=>`<td class="tr num">${r.onOrder>0?$int(r.onOrder):'—'}</td>`},
+  {label:'Avg Cost',   tip:'Average cost per each', val:r=>r.avgCostEa, render:r=>`<td class="tr num">${r.avgCostEa>0?$m2(r.avgCostEa):'—'}</td>`},
+  {label:'OH Cost',    tip:'On-hand value at cost — stranded dollars if Inactive', val:r=>r.ohCost,    render:r=>`<td class="tr num">${r.ohCost>0?$m(r.ohCost):'—'}</td>`},
+  {label:'12-Mo Rev',  tip:'Invoiced amount, trailing 12 months', val:r=>r.rev12mo,   render:r=>`<td class="tr num">${r.rev12mo>0?$m(r.rev12mo):'—'}</td>`},
+  {label:'Customers',  tip:'Distinct ordering customers, trailing 6 months', val:r=>r.numCust,   render:r=>`<td class="tr num">${r.numCust>0?$int(r.numCust):'—'}</td>`},
 ];
 function getINRows(){
   const q=document.getElementById('in-q')?.value.toLowerCase()||'';
