@@ -622,14 +622,20 @@ function joinData(raw, wh) {
     const veloSc  = scoreVelo(status,velRaw);
     const custSc  = scoreCust(status,numCust);
     const gmroiSc = scoreGMROI(status,gmroi,hasLedger&&costAmt>0);
-    const total   = status==='Active' ? dioSc+abcSc+veloSc+custSc+gmroiSc : null;
+    // Items with no inventory value (e.g. currently OOS, no ledger row) can't
+    // earn DIO (30) or GMROI (10) penalties — grading them against 100 makes
+    // missing data a free pass to KEEP. Normalize to the achievable max instead.
+    const hasGm     = hasLedger && costAmt>0;
+    const scoredMax = 60 + (hasLedger?30:0) + (hasGm?10:0);
+    const rawScore  = dioSc+abcSc+veloSc+custSc+gmroiSc;
+    const total     = status==='Active' ? Math.round(rawScore/scoredMax*100) : null;
     const recommendation = rec(status,total);
 
     return {id,brand,itemName,category,subCat,saleUnit,status,daysActive,wh,
       qoh,cons30,cons60,onOrder,avgCostEa,ohCost,invPipe,totalVal,
       rev12mo,catABC,subCatABC,xyzClass,units12mo,coV,
       numCust,custPct,netRev,costAmt,marginPct,avgInv,vop,ito,dio,gmroi,
-      velRaw,dioSc,abcSc,veloSc,custSc,gmroiSc,total,recommendation};
+      velRaw,dioSc,abcSc,veloSc,custSc,gmroiSc,scoredMax,total,recommendation};
   });
 
   // Customer category %
@@ -951,7 +957,7 @@ const SE_COLS=[
   {label:'Velo Sc',   val:r=>r.veloSc, render:r=>`<td class="tr num">${r.total!==null?r.veloSc:'—'}</td>`},
   {label:'Cust Sc',   val:r=>r.custSc, render:r=>`<td class="tr num">${r.total!==null?r.custSc:'—'}</td>`},
   {label:'GMROI Sc',  val:r=>r.gmroiSc, render:r=>`<td class="tr num">${r.total!==null?r.gmroiSc:'—'}</td>`},
-  {label:'Score',     val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?r.total:'—'}</td>`},
+  {label:'Score',     val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?(r.scoredMax<100?`<span title="Normalized: no inventory data — scored on ${r.scoredMax} available pts">${r.total}*</span>`:r.total):'—'}</td>`},
   {label:'Rec',       val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}</td>`},
 ];
 function getSERows(){
