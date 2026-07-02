@@ -165,6 +165,9 @@ table.dt tr:last-child td{border-bottom:none}
     <div class="nav-item" data-view="inactive">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Inactive
     </div>
+    <div class="nav-item" data-view="sunset-review">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Sunset Review
+    </div>
   </div>
   <div id="sidebar-footer">
     <div class="nav-sm" id="btn-settings">
@@ -289,6 +292,32 @@ table.dt tr:last-child td{border-bottom:none}
       </div>
     </div>
 
+    <!-- SUNSET REVIEW -->
+    <div class="view" id="view-sunset-review">
+      <div class="table-card">
+        <div class="fbar">
+          <button class="btn btn-outline" id="sr-export" title="Download all current SUNSET items as an Excel review file with Decision and Notes columns for the team to fill in">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Review File
+          </button>
+          <button class="btn btn-outline" id="sr-import" title="Upload the reviewed file — Decision column: CONFIRM keeps SUNSET, KEEP moves the item to WATCH with your note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Reviewed File
+          </button>
+          <input type="file" id="sr-file" accept=".xlsx" style="display:none">
+          <button class="btn btn-primary" id="sr-kill" title="Download the team-confirmed sunset SKUs as the optimization workbook">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Export Confirmed (Optimization)
+          </button>
+          <button class="btn btn-ghost" id="sr-clear-dec" title="Erase all review decisions for this warehouse">Clear Decisions</button>
+          <span class="tbl-count" id="sr-stats"></span>
+        </div>
+        <div class="fbar">
+          <input type="text" id="sr-q" placeholder="Search item or brand…">
+          <select id="sr-dec"><option value="">All Decisions</option><option>Pending</option><option>Confirmed</option><option>Kept — Watch</option></select>
+          <span class="tbl-count" id="sr-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt" id="sr-tbl"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -314,7 +343,7 @@ const S = {
   cfg: {}, raw: {}, joined: [], brandRows: [],
   wh: null, warehouses: [], totalCust: {},
   view: 'dashboard', charts: {},
-  sorts: { se:{col:null,dir:'asc'}, oh:{col:null,dir:'asc'}, be:{col:null,dir:'asc'}, sum:{col:null,dir:'asc'}, in:{col:null,dir:'asc'} },
+  sorts: { se:{col:null,dir:'asc'}, oh:{col:null,dir:'asc'}, be:{col:null,dir:'asc'}, sum:{col:null,dir:'asc'}, in:{col:null,dir:'asc'}, sr:{col:null,dir:'asc'} },
 };
 
 // ─── CONFIG ──────────────────────────────────────────────────
@@ -772,6 +801,7 @@ function setWH(wh){
   document.getElementById('wh-label').textContent=wh||'None';
   if(wh){
     S.joined=joinData(S.raw,wh);
+    applyReview(S.joined);           // team sunset-review overrides (KEEP → WATCH)
     S.brandRows=buildBrands(S.joined);
     populateFilterDropdowns();
   }
@@ -785,6 +815,7 @@ function renderView(){
     case 'brand-eval':renderBrandEval();break;
     case 'summary':   renderSummary();break;
     case 'inactive':  renderInactive();break;
+    case 'sunset-review':renderSunsetReview();break;
   }
 }
 
@@ -960,7 +991,7 @@ const SE_COLS=[
   {label:'Cust Sc',   tip:'Customer penalty, 0–15: 0 cust=15 · ≤2=12 · ≤5=9 · ≤10=5 · ≤20=2 · >20=0', val:r=>r.custSc, render:r=>`<td class="tr num">${r.total!==null?r.custSc:'—'}</td>`},
   {label:'GMROI Sc',  tip:'GMROI penalty, 0–10: <0.5=10 · <1=8 · <1.5=5 · <2=3 · <3=1 · ≥3=0. Not scored without inventory + cost data.', val:r=>r.gmroiSc, render:r=>`<td class="tr num">${r.total!==null?r.gmroiSc:'—'}</td>`},
   {label:'Score',     tip:'Total penalty score 0–100, normalized to the points available for this item (* = missing inventory data, scored on fewer points). Higher = worse.', val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?(r.scoredMax<100?`<span title="Normalized: no inventory data — scored on ${r.scoredMax} available pts">${r.total}*</span>`:r.total):'—'}</td>`},
-  {label:'Rec',       tip:'KEEP <40 · WATCH 40–54 · SUNSET ≥55', val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}</td>`},
+  {label:'Rec',       tip:'KEEP <40 · WATCH 40–54 · SUNSET ≥55. † = team review decision applied (see Sunset Review tab).', val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}${r.review?`<span title="Team review ${r.review.date||''}: ${r.review.decision==='KEEP'?'kept, moved to WATCH':'sunset confirmed'}${r.review.note?' — '+escAttr(r.review.note):''}" style="cursor:help;color:#7A5C4E"> †</span>`:''}</td>`},
 ];
 function getSERows(){
   const q=document.getElementById('se-q')?.value.toLowerCase()||'';
@@ -1171,6 +1202,176 @@ document.getElementById('in-clear').onclick=()=>{
   ['in-q','in-status','in-cat'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   if(S.view==='inactive')renderInactive();
 };
+
+// ─── SUNSET REVIEW ────────────────────────────────────────────
+// Decisions persist per warehouse in localStorage AND travel in the
+// review file itself — importing a reviewed file restores/merges state.
+function reviewKey(){return `sunsetReview.${S.wh}`;}
+function loadReview(){try{return JSON.parse(localStorage.getItem(reviewKey())||'{}');}catch{return {};}}
+function saveReview(m){localStorage.setItem(reviewKey(),JSON.stringify(m));}
+
+// Mutates joined rows: KEEP decisions flip SUNSET → WATCH and carry the note.
+function applyReview(rows){
+  const m=loadReview();
+  rows.forEach(r=>{
+    const d=m[r.id];
+    if(!d)return;
+    r.review=d; // {decision:'CONFIRM'|'KEEP', note, date}
+    if(d.decision==='KEEP'&&r.recommendation==='SUNSET') r.recommendation='WATCH';
+  });
+}
+function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function decisionBadge(r){
+  if(!r.review) return r.recommendation==='SUNSET'?'<span class="rec rnd">PENDING</span>':'<span class="muted">—</span>';
+  if(r.review.decision==='CONFIRM') return `<span class="rec rs" ${r.review.note?`title="${escAttr(r.review.note)}" style="cursor:help"`:''}>CONFIRMED</span>`;
+  return `<span class="rec rw" ${r.review.note?`title="${escAttr(r.review.note)}" style="cursor:help"`:''}>KEPT → WATCH</span>`;
+}
+
+const SR_COLS=[
+  {label:'Item ID',  tip:'NetSuite item ID', val:r=>r.id, render:r=>`<td>${r.id}</td>`},
+  {label:'Brand',    tip:'Catalog brand', val:r=>r.brand, render:r=>`<td>${r.brand||'—'}</td>`},
+  {label:'Item Name',tip:'Catalog item name', val:r=>r.itemName, w:'200px', render:r=>`<td style="min-width:200px">${r.itemName||'—'}</td>`},
+  {label:'Category', tip:'Item category', val:r=>r.category, render:r=>`<td>${r.category||'—'}</td>`},
+  {label:'Score',    tip:'Scorecard total (higher = worse). All items here scored SUNSET (≥55) before review.', val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total??'—'}</td>`},
+  {label:'DIO',      tip:'Days Inventory Outstanding', val:r=>r.dio, render:r=>`<td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td>`},
+  {label:'OH Cost',  tip:'On-hand inventory at cost', val:r=>r.ohCost, render:r=>`<td class="tr num">${$m(r.ohCost)}</td>`},
+  {label:'12-Mo Rev',tip:'Invoiced amount, trailing 12 months', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
+  {label:'Customers',tip:'Distinct ordering customers, trailing 6 months', val:r=>r.numCust, render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
+  {label:'Decision', tip:'PENDING = awaiting team review · CONFIRMED = sunset approved, goes to optimization export · KEPT → WATCH = team overrode, moved to WATCH', val:r=>r.review?r.review.decision:(r.recommendation==='SUNSET'?'PENDING':''), render:r=>`<td>${decisionBadge(r)}</td>`},
+  {label:'Note',     tip:'Team note from the reviewed file', val:r=>r.review?.note||'', w:'220px', render:r=>`<td style="min-width:220px;white-space:normal">${escAttr(r.review?.note)||'<span class="muted">—</span>'}</td>`},
+  {label:'Reviewed', tip:'Date the decision was imported', val:r=>r.review?.date||'', render:r=>`<td class="num">${r.review?.date||'<span class="muted">—</span>'}</td>`},
+];
+function getSRRows(){
+  const q=document.getElementById('sr-q')?.value.toLowerCase()||'';
+  const decF=document.getElementById('sr-dec')?.value||'';
+  return S.joined.filter(r=>{
+    // Review universe: current SUNSETs + anything the team already decided on
+    if(r.recommendation!=='SUNSET'&&!r.review)return false;
+    if(q&&!(r.brand+r.itemName+r.id).toLowerCase().includes(q))return false;
+    if(decF==='Pending'&&r.review)return false;
+    if(decF==='Confirmed'&&r.review?.decision!=='CONFIRM')return false;
+    if(decF==='Kept — Watch'&&r.review?.decision!=='KEEP')return false;
+    return true;
+  });
+}
+function renderSunsetReview(){
+  if(!S.joined.length)return;
+  const all=S.joined.filter(r=>r.recommendation==='SUNSET'||r.review);
+  const conf=all.filter(r=>r.review?.decision==='CONFIRM').length;
+  const kept=all.filter(r=>r.review?.decision==='KEEP').length;
+  document.getElementById('sr-stats').textContent=`${all.length-conf-kept} pending · ${conf} confirmed · ${kept} kept → watch`;
+  const rows=sortRows(getSRRows(),SR_COLS,S.sorts.sr);
+  makeTable('sr-tbl','sr-count',SR_COLS,rows,S.sorts.sr);
+}
+['sr-q','sr-dec'].forEach(id=>{
+  const el=document.getElementById(id);if(el){el.oninput=el.onchange=()=>{if(S.view==='sunset-review')renderSunsetReview();};}
+});
+
+// Export the review file the team fills in
+document.getElementById('sr-export').addEventListener('click', async ()=>{
+  if(!S.wh){alert('Select a warehouse first.');return;}
+  const items=S.joined.filter(r=>r.recommendation==='SUNSET'||r.review);
+  if(!items.length){alert('No SUNSET items to review.');return;}
+  const m=loadReview();
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Sunset Review');
+  ws.views=[{state:'frozen',xSplit:3,ySplit:1,activeCell:'D2'}];
+  ws.addRow(['Item ID','Brand','Item Name','Category','Score','DIO','OH Cost ($)','12-Mo Rev ($)','Customers','Decision','Notes']);
+  const hr=ws.getRow(1);hr.height=28;
+  hr.eachCell(c=>{
+    c.font={name:'Arial',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF40180B'}};
+    c.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+  });
+  [12,22,46,18,8,8,13,14,11,14,40].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
+  items.forEach(r=>{
+    const d=m[r.id]||{};
+    const row=ws.addRow([r.id,r.brand,r.itemName,r.category,r.total,r.dio>0?Math.round(r.dio):'',r.ohCost||'',r.rev12mo||'',r.numCust||'',d.decision||'',d.note||'']);
+    row.eachCell(c=>{c.font={name:'Arial',size:10};});
+    ws.getCell(row.number,7).numFmt='"$"#,##0';
+    ws.getCell(row.number,8).numFmt='"$"#,##0';
+    // Dropdown so the team can only enter valid decisions
+    ws.getCell(row.number,10).dataValidation={type:'list',allowBlank:true,formulae:['"CONFIRM,KEEP"'],showErrorMessage:true,errorTitle:'Invalid decision',error:'Use CONFIRM (sunset approved) or KEEP (move to WATCH)'};
+  });
+  const buf=await wb.xlsx.writeBuffer();
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;
+  a.download=`Sunset_Review_${S.wh}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  a.click();URL.revokeObjectURL(url);
+});
+
+// Import the reviewed file back
+document.getElementById('sr-import').addEventListener('click',()=>{
+  if(!S.wh){alert('Select a warehouse first.');return;}
+  document.getElementById('sr-file').click();
+});
+document.getElementById('sr-file').addEventListener('change', async e=>{
+  const file=e.target.files[0];e.target.value='';
+  if(!file)return;
+  try{
+    const wb=new ExcelJS.Workbook();
+    await wb.xlsx.load(await file.arrayBuffer());
+    const ws=wb.getWorksheet('Sunset Review')||wb.worksheets[0];
+    if(!ws){alert('No worksheet found in file.');return;}
+    // Map columns by header text so column order doesn't matter
+    const hdr={};
+    ws.getRow(1).eachCell((c,col)=>{hdr[String(c.text||'').trim().toLowerCase()]=col;});
+    const idCol=hdr['item id'],decCol=hdr['decision'],noteCol=hdr['notes']??hdr['note'];
+    if(!idCol||!decCol){alert('File needs "Item ID" and "Decision" columns (use the exported review file).');return;}
+    const m=loadReview();
+    let confirmed=0,kept=0,skipped=0;
+    const today=new Date().toISOString().slice(0,10);
+    ws.eachRow((row,n)=>{
+      if(n===1)return;
+      const id=String(row.getCell(idCol).text||'').trim();
+      if(!id)return;
+      const decRaw=String(row.getCell(decCol).text||'').trim().toUpperCase();
+      const note=noteCol?String(row.getCell(noteCol).text||'').trim():'';
+      if(['CONFIRM','CONFIRMED','SUNSET','YES','Y','X'].includes(decRaw)){m[id]={decision:'CONFIRM',note,date:today};confirmed++;}
+      else if(['KEEP','KEPT','NO','N','WATCH','RETAIN'].includes(decRaw)){m[id]={decision:'KEEP',note,date:today};kept++;}
+      else if(decRaw){skipped++;}
+    });
+    saveReview(m);
+    setWH(S.wh); // re-join + re-apply overrides so WATCH moves ripple everywhere
+    alert(`Imported: ${confirmed} confirmed sunset, ${kept} kept → WATCH${skipped?`, ${skipped} rows with unrecognized decisions skipped`:''}.`);
+  }catch(err){alert('Could not read file: '+err.message);}
+});
+
+// Export confirmed SKUs for the optimization workbook
+document.getElementById('sr-kill').addEventListener('click', async ()=>{
+  if(!S.wh){alert('Select a warehouse first.');return;}
+  const items=S.joined.filter(r=>r.review?.decision==='CONFIRM');
+  if(!items.length){alert('No confirmed sunset SKUs yet — import a reviewed file first.');return;}
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Confirmed Sunset');
+  ws.views=[{state:'frozen',ySplit:1,activeCell:'A2'}];
+  ws.addRow(['Item ID','Brand','Item Name','Category','Sub Cat','QOH','On Order','OH Cost ($)','12-Mo Rev ($)','Customers','Score','Review Note','Reviewed']);
+  const hr=ws.getRow(1);hr.height=28;
+  hr.eachCell(c=>{
+    c.font={name:'Arial',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFDC2626'}};
+    c.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+  });
+  [12,22,46,18,18,9,10,13,14,11,8,40,12].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
+  items.forEach(r=>{
+    const row=ws.addRow([r.id,r.brand,r.itemName,r.category,r.subCat,r.qoh?Math.round(r.qoh):'',r.onOrder?Math.round(r.onOrder):'',r.ohCost||'',r.rev12mo||'',r.numCust||'',r.total,r.review.note||'',r.review.date||'']);
+    row.eachCell(c=>{c.font={name:'Arial',size:10};});
+    ws.getCell(row.number,8).numFmt='"$"#,##0';
+    ws.getCell(row.number,9).numFmt='"$"#,##0';
+  });
+  const buf=await wb.xlsx.writeBuffer();
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;
+  a.download=`Sunset_Confirmed_${S.wh}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  a.click();URL.revokeObjectURL(url);
+});
+
+document.getElementById('sr-clear-dec').addEventListener('click',()=>{
+  if(!S.wh)return;
+  if(!confirm(`Erase all sunset-review decisions for ${S.wh}? The items revert to their scored recommendations.`))return;
+  localStorage.removeItem(reviewKey());
+  setWH(S.wh);
+});
 
 // ─── EXPORT ──────────────────────────────────────────────────
 document.getElementById('btn-export').addEventListener('click', async ()=>{
