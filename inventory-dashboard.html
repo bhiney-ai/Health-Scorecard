@@ -991,7 +991,7 @@ const SE_COLS=[
   {label:'Cust Sc',   tip:'Customer penalty, 0–15: 0 cust=15 · ≤2=12 · ≤5=9 · ≤10=5 · ≤20=2 · >20=0', val:r=>r.custSc, render:r=>`<td class="tr num">${r.total!==null?r.custSc:'—'}</td>`},
   {label:'GMROI Sc',  tip:'GMROI penalty, 0–10: <0.5=10 · <1=8 · <1.5=5 · <2=3 · <3=1 · ≥3=0. Not scored without inventory + cost data.', val:r=>r.gmroiSc, render:r=>`<td class="tr num">${r.total!==null?r.gmroiSc:'—'}</td>`},
   {label:'Score',     tip:'Total penalty score 0–100, normalized to the points available for this item (* = missing inventory data, scored on fewer points). Higher = worse.', val:r=>r.total??-1, render:r=>`<td class="tr num" style="font-weight:700">${r.total!==null?(r.scoredMax<100?`<span title="Normalized: no inventory data — scored on ${r.scoredMax} available pts">${r.total}*</span>`:r.total):'—'}</td>`},
-  {label:'Rec',       tip:'KEEP <40 · WATCH 40–54 · SUNSET ≥55. † = team review decision applied (see Sunset Review tab).', val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}${r.review?`<span title="Team review ${r.review.date||''}: ${r.review.decision==='KEEP'?'kept, moved to WATCH':'sunset confirmed'}${r.review.note?' — '+escAttr(r.review.note):''}" style="cursor:help;color:#7A5C4E"> †</span>`:''}</td>`},
+  {label:'Rec',       tip:'KEEP <40 · WATCH 40–54 · SUNSET ≥55. † = team review decision applied (see Sunset Review tab).', val:r=>r.recommendation, render:r=>`<td>${recBadge(r.recommendation,r.status)}${r.review?`<span title="Team review ${r.review.date||''}${r.review.by?' by '+escAttr(r.review.by):''}: ${r.review.decision==='KEEP'?'kept, moved to WATCH':'sunset confirmed'}${r.review.note?' — '+escAttr(r.review.note):''}" style="cursor:help;color:#7A5C4E"> †</span>`:''}</td>`},
 ];
 function getSERows(){
   const q=document.getElementById('se-q')?.value.toLowerCase()||'';
@@ -1223,8 +1223,9 @@ function applyReview(rows){
 function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function decisionBadge(r){
   if(!r.review) return r.recommendation==='SUNSET'?'<span class="rec rnd">PENDING</span>':'<span class="muted">—</span>';
-  if(r.review.decision==='CONFIRM') return `<span class="rec rs" ${r.review.note?`title="${escAttr(r.review.note)}" style="cursor:help"`:''}>CONFIRMED</span>`;
-  return `<span class="rec rw" ${r.review.note?`title="${escAttr(r.review.note)}" style="cursor:help"`:''}>KEPT → WATCH</span>`;
+  const tipTxt=[r.review.by,r.review.note].filter(Boolean).join(' — ');
+  if(r.review.decision==='CONFIRM') return `<span class="rec rs" ${tipTxt?`title="${escAttr(tipTxt)}" style="cursor:help"`:''}>CONFIRMED</span>`;
+  return `<span class="rec rw" ${tipTxt?`title="${escAttr(tipTxt)}" style="cursor:help"`:''}>KEPT → WATCH</span>`;
 }
 
 const SR_COLS=[
@@ -1238,6 +1239,7 @@ const SR_COLS=[
   {label:'12-Mo Rev',tip:'Invoiced amount, trailing 12 months', val:r=>r.rev12mo, render:r=>`<td class="tr num">${$m(r.rev12mo)}</td>`},
   {label:'Customers',tip:'Distinct ordering customers, trailing 6 months', val:r=>r.numCust, render:r=>`<td class="tr num">${$int(r.numCust)}</td>`},
   {label:'Decision', tip:'PENDING = awaiting team review · CONFIRMED = sunset approved, goes to optimization export · KEPT → WATCH = team overrode, moved to WATCH', val:r=>r.review?r.review.decision:(r.recommendation==='SUNSET'?'PENDING':''), render:r=>`<td>${decisionBadge(r)}</td>`},
+  {label:'Decided By',tip:'Who made the call, from the reviewed file', val:r=>r.review?.by||'', render:r=>`<td>${escAttr(r.review?.by)||'<span class="muted">—</span>'}</td>`},
   {label:'Note',     tip:'Team note from the reviewed file', val:r=>r.review?.note||'', w:'220px', render:r=>`<td style="min-width:220px;white-space:normal">${escAttr(r.review?.note)||'<span class="muted">—</span>'}</td>`},
   {label:'Reviewed', tip:'Date the decision was imported', val:r=>r.review?.date||'', render:r=>`<td class="num">${r.review?.date||'<span class="muted">—</span>'}</td>`},
 ];
@@ -1276,17 +1278,17 @@ document.getElementById('sr-export').addEventListener('click', async ()=>{
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('Sunset Review');
   ws.views=[{state:'frozen',xSplit:3,ySplit:1,activeCell:'D2'}];
-  ws.addRow(['Item ID','Brand','Item Name','Category','Score','DIO','OH Cost ($)','12-Mo Rev ($)','Customers','Decision','Notes']);
+  ws.addRow(['Item ID','Brand','Item Name','Category','Score','DIO','OH Cost ($)','12-Mo Rev ($)','Customers','Decision','Decided By','Notes']);
   const hr=ws.getRow(1);hr.height=28;
   hr.eachCell(c=>{
     c.font={name:'Arial',bold:true,size:10,color:{argb:'FFFFFFFF'}};
     c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF40180B'}};
     c.alignment={horizontal:'center',vertical:'middle',wrapText:true};
   });
-  [12,22,46,18,8,8,13,14,11,14,40].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
+  [12,22,46,18,8,8,13,14,11,14,16,40].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
   items.forEach(r=>{
     const d=m[r.id]||{};
-    const row=ws.addRow([r.id,r.brand,r.itemName,r.category,r.total,r.dio>0?Math.round(r.dio):'',r.ohCost||'',r.rev12mo||'',r.numCust||'',d.decision||'',d.note||'']);
+    const row=ws.addRow([r.id,r.brand,r.itemName,r.category,r.total,r.dio>0?Math.round(r.dio):'',r.ohCost||'',r.rev12mo||'',r.numCust||'',d.decision||'',d.by||'',d.note||'']);
     row.eachCell(c=>{c.font={name:'Arial',size:10};});
     ws.getCell(row.number,7).numFmt='"$"#,##0';
     ws.getCell(row.number,8).numFmt='"$"#,##0';
@@ -1316,7 +1318,7 @@ document.getElementById('sr-file').addEventListener('change', async e=>{
     // Map columns by header text so column order doesn't matter
     const hdr={};
     ws.getRow(1).eachCell((c,col)=>{hdr[String(c.text||'').trim().toLowerCase()]=col;});
-    const idCol=hdr['item id'],decCol=hdr['decision'],noteCol=hdr['notes']??hdr['note'];
+    const idCol=hdr['item id'],decCol=hdr['decision'],noteCol=hdr['notes']??hdr['note'],byCol=hdr['decided by']??hdr['reviewer']??hdr['name'];
     if(!idCol||!decCol){alert('File needs "Item ID" and "Decision" columns (use the exported review file).');return;}
     const m=loadReview();
     let confirmed=0,kept=0,skipped=0;
@@ -1327,8 +1329,9 @@ document.getElementById('sr-file').addEventListener('change', async e=>{
       if(!id)return;
       const decRaw=String(row.getCell(decCol).text||'').trim().toUpperCase();
       const note=noteCol?String(row.getCell(noteCol).text||'').trim():'';
-      if(['CONFIRM','CONFIRMED','SUNSET','YES','Y','X'].includes(decRaw)){m[id]={decision:'CONFIRM',note,date:today};confirmed++;}
-      else if(['KEEP','KEPT','NO','N','WATCH','RETAIN'].includes(decRaw)){m[id]={decision:'KEEP',note,date:today};kept++;}
+      const by=byCol?String(row.getCell(byCol).text||'').trim():'';
+      if(['CONFIRM','CONFIRMED','SUNSET','YES','Y','X'].includes(decRaw)){m[id]={decision:'CONFIRM',note,by,date:today};confirmed++;}
+      else if(['KEEP','KEPT','NO','N','WATCH','RETAIN'].includes(decRaw)){m[id]={decision:'KEEP',note,by,date:today};kept++;}
       else if(decRaw){skipped++;}
     });
     saveReview(m);
@@ -1345,16 +1348,16 @@ document.getElementById('sr-kill').addEventListener('click', async ()=>{
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('Confirmed Sunset');
   ws.views=[{state:'frozen',ySplit:1,activeCell:'A2'}];
-  ws.addRow(['Item ID','Brand','Item Name','Category','Sub Cat','QOH','On Order','OH Cost ($)','12-Mo Rev ($)','Customers','Score','Review Note','Reviewed']);
+  ws.addRow(['Item ID','Brand','Item Name','Category','Sub Cat','QOH','On Order','OH Cost ($)','12-Mo Rev ($)','Customers','Score','Decided By','Review Note','Reviewed']);
   const hr=ws.getRow(1);hr.height=28;
   hr.eachCell(c=>{
     c.font={name:'Arial',bold:true,size:10,color:{argb:'FFFFFFFF'}};
     c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFDC2626'}};
     c.alignment={horizontal:'center',vertical:'middle',wrapText:true};
   });
-  [12,22,46,18,18,9,10,13,14,11,8,40,12].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
+  [12,22,46,18,18,9,10,13,14,11,8,16,40,12].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
   items.forEach(r=>{
-    const row=ws.addRow([r.id,r.brand,r.itemName,r.category,r.subCat,r.qoh?Math.round(r.qoh):'',r.onOrder?Math.round(r.onOrder):'',r.ohCost||'',r.rev12mo||'',r.numCust||'',r.total,r.review.note||'',r.review.date||'']);
+    const row=ws.addRow([r.id,r.brand,r.itemName,r.category,r.subCat,r.qoh?Math.round(r.qoh):'',r.onOrder?Math.round(r.onOrder):'',r.ohCost||'',r.rev12mo||'',r.numCust||'',r.total,r.review.by||'',r.review.note||'',r.review.date||'']);
     row.eachCell(c=>{c.font={name:'Arial',size:10};});
     ws.getCell(row.number,8).numFmt='"$"#,##0';
     ws.getCell(row.number,9).numFmt='"$"#,##0';
