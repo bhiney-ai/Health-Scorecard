@@ -44,6 +44,29 @@ KEEP_COLS = {
     'daysAct': {'Item ID', 'Warehouse Name', 'days Active'},
 }
 
+# ── Network Sales Tracker: transaction-level item × customer detail ──────────
+# Feeds the Score Engine customer drill-down. One Google Sheet per warehouse.
+# NOTE: these must be shared "Anyone with the link can view" like the sheets
+# above, or the fetch returns HTTP 401 and the warehouse is skipped (previous
+# data is preserved rather than wiped).
+TRACKERS = {
+    'ATL1': '1uxqrorc7fdiFhXWqTo0s-2cgkuUA4Hji5yqLDYP_c_w',
+    'AUS1': '124F1Y83vjPTPtfIHTtpt7DeWMqKfm5LhZFMiIPL1mc8',
+    'BLI1': '1rfRGyGeQUN_Jac2KsOcEqnCDBvy6WyBMktvKyYIWoQc',
+    'CLT1': '1Lblp0sNAJnBuzX1lk0dQQTHlMpi8yRw49MkC-wuqdbo',
+    'DEN1': '1LnAxaMw6xXMBZi3E5Q1IjY1hzB5t7TrxAJZeLVYKwsA',
+    'DFW1': '18vMFry_IIPv5ni3aLmCd7kMGz7wCaLyEduRh-hhzu6o',
+    'EWR1': '1OsbP18hzmXov7QKesn1-toJnR833HKXpNWh1it3Hhcw',
+    'HOU1': '1Co3X13WW3AznohX1WMyYqfrScxIlYsVOXNDA8DfWi_8',
+    'LAX1': '13LL7yEGXjuM-ocXRN32A0e5nbwXyNW2si6Sghh5IddA',
+    'MDT1': '1YjMwL3bvowp3TQjq9IEWEO9hSxWIEwt9nUbp1vELsIY',
+    'MIA1': '1kcVvBh5jc836Mn6iDWQ59BArHKU5KMjBDp1Kj1lAUrc',
+    'PDX1': '1eyYspvPktp11uzstOgiImp-57HFBJViYFh0FLO-SBIg',
+    'PWM1': '17QDbX66utwYMhqrzpNyrGtg9oW95TgajzRryhKKJGuY',
+    'SEA1': '1pRxu2eNFV-sqGKJG8f7P6eUOoAXXHGTz5qaLzFGduIA',
+    'SMF1': '1N4qqAMNbIjXZ150YuoZSlVpf1jUdf6udQawzbX0UA4c',
+}
+
 def fetch_sheet(sheet_id, gid):
     url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}'
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -68,6 +91,39 @@ def csv_to_json(text, keep=None):
             result.append(obj)
     return result
 
+def aggregate_tracker(rows, wh):
+    """Collapse transaction rows to one record per (item, customer).
+
+    A tracker sheet can carry 40k+ order lines; the drill-down only needs the
+    customer roster per item, so aggregating here keeps the published JSON
+    small enough to load in the browser.
+    """
+    agg = {}
+    for r in rows:
+        item = (r.get('Item Name') or '').strip()
+        cust = (r.get('Customer Name') or '').strip()
+        if not item or not cust:
+            continue
+        k = (item.lower(), cust)
+        try:
+            qty = float((r.get('SO Item Qty') or '0').replace(',', '') or 0)
+        except ValueError:
+            qty = 0.0
+        date = (r.get('Date Date') or '').strip()
+        a = agg.get(k)
+        if a is None:
+            agg[k] = {'w': wh, 'i': item, 'c': cust, 'q': qty, 'n': 1, 'd': date,
+                      'e': (r.get('Enterprise') or '').strip().upper() == 'TRUE'}
+        else:
+            a['q'] += qty
+            a['n'] += 1
+            if date > a['d']:
+                a['d'] = date
+    for a in agg.values():
+        a['q'] = round(a['q'], 2)
+    return list(agg.values())
+
+
 errors = []
 for key, (sid, gid) in SHEETS.items():
     try:
@@ -80,6 +136,34 @@ for key, (sid, gid) in SHEETS.items():
     except Exception as e:
         print(f'  ERROR: {e}', file=sys.stderr)
         errors.append(f'{key}: {e}')
+
+# ── Network Sales Tracker → custDetail.json ─────────────────────────────────
+# A tracker that 401s (not link-shared) is skipped, not fatal: the drill-down
+# degrades to "not loaded" for that warehouse and the rest still publish.
+detail, skipped = [], []
+for wh, sid in TRACKERS.items():
+    try:
+        print(f'Fetching tracker {wh}...', flush=True)
+        rows = csv_to_json(fetch_sheet(sid, '0'))
+        recs = aggregate_tracker(rows, wh)
+        detail.extend(recs)
+        print(f'  → {len(rows)} lines → {len(recs)} item×customer', flush=True)
+    except Exception as e:
+        code = getattr(e, 'code', None)
+        skipped.append(f'{wh} ({"HTTP "+str(code) if code else e})')
+        print(f'  SKIP {wh}: {e}', file=sys.stderr)
+
+if detail:
+    with open('data/custDetail.json', 'w') as f:
+        json.dump(detail, f, separators=(',', ':'))
+    print(f'custDetail.json → {len(detail)} rows', flush=True)
+elif skipped:
+    # Never overwrite good data with nothing; leave the previous file in place.
+    print('No tracker data fetched — keeping existing custDetail.json', file=sys.stderr)
+
+if skipped:
+    print(f'\nTrackers skipped (share these "Anyone with the link can view"): '
+          f'{", ".join(skipped)}', file=sys.stderr)
 
 if errors:
     print('\nFailed:', '\n'.join(errors), file=sys.stderr)

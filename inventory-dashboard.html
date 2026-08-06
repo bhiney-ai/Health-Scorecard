@@ -129,6 +129,28 @@ table.dt tr:last-child td{border-bottom:none}
 .rev-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .rev-tbl th{padding:5px 9px;text-align:left;font-weight:600;color:#7A5C4E;font-size:10px;text-transform:uppercase;border-bottom:2px solid #E8E0D4}
 .rev-tbl td{padding:5px 9px;border-bottom:1px solid #F5F0E8;color:#40180B}
+/* ── Item drill-down ── */
+#se-tbl tbody tr{cursor:pointer}
+#se-tbl tbody tr:hover td{background:#FBF3E0}
+.drill{background:#fff;border-radius:12px;width:900px;max-width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(64,24,11,.25)}
+.drill-h{padding:16px 20px;border-bottom:1px solid #E8E0D4;display:flex;align-items:flex-start;gap:12px}
+.drill-h h2{font-size:16px;font-weight:700;color:#40180B;line-height:1.3}
+.drill-h .sub{font-size:12px;color:#7A5C4E;margin-top:3px}
+.drill-b{padding:18px 20px;overflow-y:auto}
+.drill-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px}
+.ds{background:#FAF7F2;border:1px solid #E8E0D4;border-radius:8px;padding:10px 12px}
+.ds-l{font-size:10px;font-weight:600;color:#7A5C4E;text-transform:uppercase;letter-spacing:.05em}
+.ds-v{font-size:17px;font-weight:700;color:#40180B;margin-top:3px;line-height:1}
+.ds-s{font-size:10px;color:#A08070;margin-top:2px}
+.drill-sec{font-size:11px;font-weight:700;color:#7A5C4E;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px}
+.ctbl{width:100%;border-collapse:collapse;font-size:12px}
+.ctbl th{text-align:left;padding:6px 9px;background:#F5F0E8;color:#7A5C4E;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #E8E0D4;position:sticky;top:0}
+.ctbl td{padding:6px 9px;border-bottom:1px solid #F5F0E8;color:#40180B}
+.ctbl tr:hover td{background:#FBF8F3}
+.cbar{height:5px;background:#FFD100;border-radius:3px;min-width:2px}
+.ent{background:#40180B;color:#FFD100;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px}
+.drill-note{background:#FAF7F2;border:1px solid #E8E0D4;border-left:3px solid #FFD100;border-radius:6px;padding:12px 14px;font-size:12px;color:#7A5C4E;line-height:1.6}
+.drill-note strong{color:#40180B}
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#F5F0E8}
 ::-webkit-scrollbar-thumb{background:#D5C9BC;border-radius:3px}::-webkit-scrollbar-thumb:hover{background:#BFB0A0}
@@ -322,6 +344,20 @@ table.dt tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ITEM DRILL-DOWN -->
+<div class="modal-bg hidden" id="drill-modal">
+  <div class="drill">
+    <div class="drill-h">
+      <div style="flex:1">
+        <h2 id="drill-title">—</h2>
+        <div class="sub" id="drill-sub"></div>
+      </div>
+      <button class="btn btn-ghost" id="drill-close" style="padding:4px 8px;font-size:16px">✕</button>
+    </div>
+    <div class="drill-b" id="drill-body"></div>
+  </div>
+</div>
+
 <!-- SETTINGS MODAL -->
 <div class="modal-bg hidden" id="settings-modal">
   <div class="modal">
@@ -354,7 +390,7 @@ function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
 
 // ─── FETCH (local JSON files written by GitHub Action) ────────
 async function fetchAll() {
-  const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc','daysAct'];
+  const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc','daysAct','custDetail'];
   // No cache:'no-cache' — let browser cache serve repeat visits via ETags
   const results=await Promise.allSettled(keys.map(k=>fetch(`data/${k}.json`).then(r=>{if(!r.ok)throw new Error(`${k}: HTTP ${r.status}`);return r.json();})));
   const out={};const errs=[];
@@ -364,6 +400,24 @@ async function fetchAll() {
   });
   if(errs.length) console.warn('Some sources failed:',errs);
   return out;
+}
+
+// Index item×customer detail as wh → lowercased item name → [customers].
+// The tracker source carries no NetSuite Item ID, so the join is on item name;
+// names are unique within a warehouse in the on-hand catalog.
+function buildCustIdx(rows){
+  const idx={};
+  (rows||[]).forEach(r=>{
+    const wh=r.w, key=String(r.i||'').trim().toLowerCase();
+    if(!wh||!key) return;
+    (idx[wh] ||= {})[key] ||= [];
+    idx[wh][key].push(r);
+  });
+  Object.values(idx).forEach(items=>Object.values(items).forEach(list=>list.sort((a,b)=>b.q-a.q)));
+  return idx;
+}
+function custFor(r){
+  return (S.custIdx?.[r.wh]?.[String(r.itemName||'').trim().toLowerCase()])||[];
 }
 
 // Pre-group all rows by warehouse once at load time.
@@ -618,6 +672,8 @@ function joinData(raw, wh) {
     // Customers
     const numCust   = n(cust,'# of Ordering Customers','num_customers');
     const custPct   = numCust / totalCustWH;
+    // 6-mo revenue from the customer source — pairs with numCust for $/customer
+    const custNetRev= n(cust,'net revenue','Net Revenue');
 
     // Customer Margin
     const netRev    = n(mgn,'net revenue','Net Revenue');
@@ -769,6 +825,7 @@ async function refresh(){
     S.raw=await fetchAll();
     enrichABC(S.raw.abc);
     S.grp=groupByWH(S.raw);
+    S.custIdx=buildCustIdx(S.raw.custDetail);
     S.warehouses=detectWH(S.raw);
     S.totalCust=parseTotalCust(S.raw.custMkt);
     localStorage.setItem('inv_dash_warehouses',JSON.stringify(S.warehouses));
@@ -1016,6 +1073,75 @@ function renderScoreEngine(){
   if(!S.joined.length)return;
   const rows=sortRows(getSERows(),SE_COLS,S.sorts.se);
   makeTable('se-tbl','se-count',SE_COLS,rows,S.sorts.se);
+  // Row click → customer drill-down. Bound after each render since rows are replaced.
+  const tb=document.querySelector('#se-tbl tbody');
+  tb.querySelectorAll('tr').forEach((tr,i)=>{
+    tr.title='Click for customer detail';
+    tr.onclick=()=>openDrill(rows[i]);
+  });
+}
+
+// ─── ITEM DRILL-DOWN ──────────────────────────────────────────
+function closeDrill(){document.getElementById('drill-modal').classList.add('hidden');}
+document.getElementById('drill-close').onclick=closeDrill;
+document.getElementById('drill-modal').addEventListener('click',e=>{if(e.target.id==='drill-modal')closeDrill();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrill();});
+
+function openDrill(r){
+  if(!r)return;
+  const custs=custFor(r);
+  document.getElementById('drill-title').textContent=r.itemName||r.id;
+  document.getElementById('drill-sub').innerHTML=
+    `${r.brand||'—'} · ${r.category||'—'} · Item ${r.id} · ${r.wh}
+     &nbsp;&nbsp;${abcBadge(r.catABC)} ${xyzBadge(r.xyzClass)} ${recBadge(r.recommendation,r.status)}`;
+
+  // Customer-count percentile within the item's category
+  const peers=S.joined.filter(x=>x.category===r.category&&x.status==='Active'&&x.numCust>0)
+                      .map(x=>x.numCust).sort((a,b)=>a-b);
+  const below=peers.filter(c=>c<r.numCust).length;
+  const pctile=peers.length?Math.round(below/peers.length*100):null;
+  const medCust=peers.length?peers[Math.floor(peers.length/2)]:0;
+  const revPer=r.numCust>0?(r.custNetRev||r.netRev||0)/r.numCust:0;
+
+  const stats=`<div class="drill-stats">
+    <div class="ds" title="Distinct ordering customers, trailing 6 months"><div class="ds-l">Customers</div><div class="ds-v">${$int(r.numCust)}</div><div class="ds-s">${pctile!==null?`${pctile}th pct in category`:'—'}</div></div>
+    <div class="ds" title="Share of all warehouse customers who order this item"><div class="ds-l">Penetration</div><div class="ds-v">${$pct(r.custPct)}</div><div class="ds-s">of ${S.wh} customers</div></div>
+    <div class="ds" title="This item's share of customer orders within its category"><div class="ds-l">Category Share</div><div class="ds-v">${$pct(r.custCatPct)}</div><div class="ds-s">median peer: ${$int(medCust)} cust</div></div>
+    <div class="ds" title="6-month customer revenue divided by ordering customers"><div class="ds-l">Rev / Customer</div><div class="ds-v" style="font-size:15px">${$m(revPer)}</div><div class="ds-s">6-mo basis</div></div>
+    <div class="ds" title="Days Inventory Outstanding"><div class="ds-l">DIO</div><div class="ds-v">${r.dio>0?$fix(r.dio,0):'—'}</div><div class="ds-s">${$m(r.ohCost)} on hand</div></div>
+    <div class="ds" title="Scorecard total — higher is worse"><div class="ds-l">Score</div><div class="ds-v">${r.total??'—'}${r.scoredMax<100?'*':''}</div><div class="ds-s">${r.recommendation||r.status}</div></div>
+  </div>`;
+
+  let body;
+  if(custs.length){
+    const max=custs[0].q||1;
+    const totQ=custs.reduce((s,c)=>s+c.q,0);
+    const top3=custs.slice(0,3).reduce((s,c)=>s+c.q,0);
+    const conc=totQ>0?top3/totQ:0;
+    body=stats+
+      `<div class="drill-sec">Ordering customers (${custs.length}) — ${$pct(conc)} of units from top 3</div>
+       <div style="max-height:320px;overflow-y:auto;border:1px solid #E8E0D4;border-radius:8px">
+       <table class="ctbl"><thead><tr>
+         <th>Customer</th><th class="tr">Units</th><th style="width:110px">Share</th>
+         <th class="tr">Orders</th><th class="tr">Last Order</th></tr></thead><tbody>`+
+      custs.map(c=>`<tr>
+         <td>${escAttr(c.c)}${c.e?'<span class="ent">ENT</span>':''}</td>
+         <td class="tr num">${$int(c.q)}</td>
+         <td><div class="cbar" style="width:${Math.max(2,Math.round(c.q/max*100))}%"></div></td>
+         <td class="tr num">${$int(c.n)}</td>
+         <td class="tr num">${c.d||'—'}</td></tr>`).join('')+
+      `</tbody></table></div>
+       <div class="ds-s" style="margin-top:8px">Units are order quantities from the Network Sales Tracker; the Customers stat above is the 6-month distinct count from the customer source, so the two can differ in window.</div>`;
+  } else {
+    const loaded=S.custIdx&&S.custIdx[r.wh];
+    body=stats+`<div class="drill-note">${
+      loaded
+        ? `<strong>No tracker orders for this item.</strong> ${S.wh} customer detail is loaded, but nothing matched “${escAttr(r.itemName)}”. Most often the item sold under a different name, or it has had no orders in the tracker window.`
+        : `<strong>Customer detail not loaded for ${r.wh}.</strong> The named-customer drill-down reads the “Network Sales Tracker — ${r.wh}” sheet. Share that file <em>Anyone with the link can view</em> and it will populate on the next data refresh. The stats above come from the aggregate customer source and are already live.`
+    }</div>`;
+  }
+  document.getElementById('drill-body').innerHTML=body;
+  document.getElementById('drill-modal').classList.remove('hidden');
 }
 ['se-q','se-rec','se-abc','se-xyz','se-cat','se-status'].forEach(id=>{
   const el=document.getElementById(id);if(el){el.oninput=el.onchange=()=>{if(S.view==='score-engine')renderScoreEngine();};}
