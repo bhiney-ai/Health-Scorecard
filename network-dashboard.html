@@ -119,6 +119,7 @@ table.hm td.side{padding:0 8px;text-align:right;font-variant-numeric:tabular-num
 .ds-v{font-size:17px;font-weight:700;margin-top:3px;line-height:1}
 .ds-s{font-size:10px;color:#A08070;margin-top:3px}
 .drill-sec{font-size:11px;font-weight:700;color:#7A5C4E;text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px}
+.drill-sec{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.drill-sec small{flex:1;margin-left:0!important}.btn.csv{font-size:11px;padding:4px 10px;text-transform:none;letter-spacing:0}
 .drill-sec small{font-weight:400;text-transform:none;letter-spacing:0;color:#A08070;margin-left:6px}
 .box{border:1px solid #E8E0D4;border-radius:8px;overflow:auto;max-height:340px}
 .note{background:#FAF7F2;border:1px solid #E8E0D4;border-left:3px solid #FFD100;border-radius:6px;padding:10px 14px;font-size:12px;color:#7A5C4E;line-height:1.6;margin-bottom:16px}
@@ -598,6 +599,14 @@ function scoreRows(){
 function renderScore(){table('s',S_COLS,scoreRows(),r=>openItem(r.id),'SKU-locations');}
 
 // ─── DRILL-DOWNS ─────────────────────────────────────────────
+// CSV download. Text cells starting with = + - @ get a leading apostrophe so a
+// spreadsheet never runs them as formulas; BOM keeps Excel on UTF-8.
+function downloadCSV(filename,headers,rows){
+  const cell=x=>{let t=x===null||x===undefined?'':String(x);if(typeof x==='string'&&/^[=+\-@]/.test(t))t="'"+t;return /[",\n\r]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
+  const csv='﻿'+[headers,...rows].map(r=>r.map(cell).join(',')).join('\r\n')+'\r\n';
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
+}
 function showDrill(title,sub,body){
   document.getElementById('drill-title').textContent=title;
   document.getElementById('drill-sub').innerHTML=sub;
@@ -650,8 +659,23 @@ function openVendor(name){
       ${stat('Avg DIO',v.avgDIO?$fix(v.avgDIO,0):'—',`GMROI ${v.avgGMROI?$fix(v.avgGMROI):'—'}`)}
       ${stat('Stranded $',$m(v.stranded),'inactive items on hand')}
     </div>
-    <div class="drill-sec">By warehouse<small>Brand Evaluation row per warehouse — identical to the single-warehouse view. Click a row to open it there.</small></div>${whTbl}
-    <div class="drill-sec">Items across warehouses<small>Click an item for its full per-warehouse score breakdown.</small></div>${CELL_LEGEND}${itemTbl}`);
+    <div class="drill-sec">By warehouse<small>Brand Evaluation row per warehouse — identical to the single-warehouse view. Click a row to open it there.</small><button class="btn btn-outline csv" id="csv-wh" title="One row per warehouse for this vendor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Warehouses CSV</button></div>${whTbl}
+    <div class="drill-sec">Items across warehouses<small>Click an item for its full per-warehouse score breakdown.</small><button class="btn btn-outline csv" id="csv-grid" title="One row per item, one score column per warehouse — every item, not just the ones shown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Score grid CSV</button><button class="btn btn-outline csv" id="csv-detail" title="One row per item per warehouse with all metrics and the five score components"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Item detail CSV</button></div>${CELL_LEGEND}${itemTbl}`);
+  const slug=name.replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'')||'vendor', day=new Date().toISOString().slice(0,10);
+  const r1=x=>x===null||x===undefined||isNaN(x)?'':Math.round(x*10)/10, r4=x=>x?Math.round(x*1e4)/1e4:'', r2=x=>x?Math.round(x*100)/100:'';
+  document.getElementById('csv-wh').onclick=()=>downloadCSV(`${slug}_by_warehouse_${day}.csv`,
+    ['Vendor','Warehouse','Category','SKUs','12-Mo Rev','Rev Share','OH Cost','A-Class','B-Class','C-Class','X-Class','Z-Class','Avg DIO','Margin %','Avg GMROI','Avg Score','Keep','Watch','Sunset SKUs','% Sunset','Sunset OH $','Rev Retention %','Cust Impacted','Stranded $','Brand Rec'],
+    cs.map(c=>[name,c.wh,c.category,c.skus,r2(c.rev),v.rev>0?r4(c.rev/v.rev):'',r2(c.cost),c.aClass,c.bClass,c.cClass,c.xClass,c.zClass,r1(c.avgDIO),r4(c.blendedMargin),r2(c.avgGMROI),r1(c.avgScore),c.keep,c.watch,c.sunsetSkus,c.scored?r4(c.sunsetSkus/c.scored):'',r2(c.sunsetCost),c.rev>0?r4(c.revRetPct):'',c.custImpacted,r2(c.stranded),c.recommendation]));
+  document.getElementById('csv-grid').onclick=()=>downloadCSV(`${slug}_item_score_grid_${day}.csv`,
+    ['Vendor','Item ID','Item Name','Category',...cols,'Warehouses','12-Mo Rev','OH Cost','Customers','Avg Score','Min Score','Max Score','Keep','Watch','Sunset','Sunset OH $','Network Read'],
+    its.map(i=>{const by=Object.fromEntries(i.rows.map(r=>[r.wh,r]));
+      return [name,i.id,i.itemName,i.category,...cols.map(w=>{const r=by[w];return !r?'':r.total!==null?r.total:r.status==='Inactive'?'off':r.status==='No Data'?'n/d':'new';}),
+        i.nWH,r2(i.rev),r2(i.cost),i.cust,r1(i.avgScore),i.min??'',i.max??'',i.keep,i.watch,i.sunset,r2(i.sunsetCost),i.read];}));
+  document.getElementById('csv-detail').onclick=()=>downloadCSV(`${slug}_item_detail_${day}.csv`,
+    ['Vendor','Warehouse','Item ID','Item Name','Category','Sub Cat','Status','ABC','XYZ','QOH','On Order','OH Cost','12-Mo Rev','Units 12-Mo','Customers','Margin %','DIO','ITO','GMROI','DIO Sc','ABC Sc','Velo Sc','Cust Sc','GMROI Sc','Score','Scored Out Of','Recommendation','Team Review'],
+    its.flatMap(i=>i.rows.slice().sort((a,b)=>a.wh.localeCompare(b.wh)).map(r=>{const t=r.total!==null;
+      return [name,r.wh,r.id,r.itemName,r.category,r.subCat,r.status,r.catABC,r.xyzClass,r1(r.qoh),r1(r.onOrder),r2(r.ohCost),r2(r.rev12mo),r.units12mo||'',r.numCust,r4(r.marginPct),r.dio>0?Math.round(r.dio):'',r2(r.ito),r2(r.gmroi),
+        t?r.dioSc:'',t?r.abcSc:'',t?r.veloSc:'',t?r.custSc:'',t?r.gmroiSc:'',t?r.total:'',t?r.scoredMax:'',r.recommendation,r.review?r.review.decision:''];})));
   document.querySelector('#vd-wh tbody').onclick=e=>{const tr=e.target.closest('tr');if(tr)location.href=`inventory-dashboard.html?wh=${encodeURIComponent(tr.dataset.wh)}`;};
   document.querySelector('#vd-items tbody').onclick=e=>{const tr=e.target.closest('tr');if(tr)openItem(tr.dataset.item);};
 }
