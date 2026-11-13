@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Inventory Health — Odeko</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Crect width='220' height='220' rx='44' fill='%23FFD100'/%3E%3Cg transform='translate(60,0)'%3E%3Cpath fill='%2340180B' d='M73.5 220c-34.6 0-53.4-44.7-66.2-110C-5.4 44.7-3.9 0 30.7 0c33.9 0 53.4 44.7 66.2 110 12.6 65.3 10.5 110-23.4 110zM37.2 33.5c-6.8 0-3.3 26.4 6.4 76.5 9.7 50.1 16.6 76.5 23.4 76.5s3.3-26.4-6.4-76.5c-9.8-50.1-16.7-76.5-23.4-76.5z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="scorecard-core.js"></script>
+<style>
+/* Odeko brand tokens — same as inventory-dashboard.html
+   Mocha #40180B · Yellow #FFD100 · Ecru #FFFFDF · Warm bg #F5F0E8 · Mid-mocha #7A5C4E · Border #E8E0D4 */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',system-ui,sans-serif;background:#F5F0E8;color:#40180B;height:100vh;display:flex;overflow:hidden}
+a{color:inherit}
+#sidebar{width:220px;min-width:220px;background:#40180B;display:flex;flex-direction:column;z-index:10}
+#sidebar-header{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.12)}
+#sidebar-logo{display:block;height:22px;width:auto}
+#sidebar-header p{font-size:11px;color:rgba(255,255,255,.4);margin-top:8px;letter-spacing:.03em}
+#nav-items{flex:1;padding:8px 0;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-left:3px solid transparent;color:rgba(255,255,255,.5);font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+.nav-item:hover{color:#FFFFDF;background:rgba(255,255,255,.07)}
+.nav-item.active{color:#FFFFDF;background:rgba(255,209,0,.14);border-left-color:#FFD100}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+#sidebar-footer{padding:12px 8px;border-top:1px solid rgba(255,255,255,.12)}
+.nav-sm{display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer;border-radius:6px;color:rgba(255,255,255,.4);font-size:12px;transition:all .15s;text-decoration:none}
+.nav-sm:hover{color:#FFFFDF;background:rgba(255,255,255,.07)}
+.nav-sm svg{width:14px;height:14px}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#topbar{background:#fff;border-bottom:1px solid #E8E0D4;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+#topbar h2{font-size:15px;font-weight:600;margin-right:auto}
+.btn{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:all .15s;display:flex;align-items:center;gap:6px;text-decoration:none}
+.btn-primary{background:#40180B;color:#fff}.btn-primary:hover{background:#2d1008}
+.btn-outline{background:#fff;color:#40180B;border:1px solid #D5C9BC}.btn-outline:hover{background:#F5F0E8;border-color:#40180B}
+.btn-ghost{background:transparent;color:#7A5C4E;font-size:12px;padding:4px 10px}.btn-ghost:hover{background:#EDE8DC;color:#40180B}
+.btn svg{width:14px;height:14px}
+#ts{font-size:11px;color:#A08070}
+#content{flex:1;overflow-y:auto;padding:20px}
+.view{display:none}.view.active{display:block}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px;margin-bottom:20px}
+.kpi-card{background:#fff;border-radius:10px;padding:16px;border:1px solid #E8E0D4;box-shadow:0 1px 3px rgba(64,24,11,.06);border-top:3px solid #FFD100;cursor:help}
+.kpi-label{font-size:11px;font-weight:600;color:#7A5C4E;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.kpi-value{font-size:22px;font-weight:700;line-height:1}
+.kpi-sub{font-size:11px;color:#A08070;margin-top:4px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+@media(max-width:1100px){.two-col{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:10px;border:1px solid #E8E0D4;box-shadow:0 1px 3px rgba(64,24,11,.06);overflow:hidden;margin-bottom:20px}
+.card-pad{padding:14px 16px}
+.card-title{font-size:11px;font-weight:700;color:#7A5C4E;text-transform:uppercase;letter-spacing:.05em}
+.card-sub{font-size:11px;color:#A08070;margin-top:2px;margin-bottom:10px}
+.tbl-head{padding:10px 16px;border-bottom:1px solid #E8E0D4;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tbl-head h3{font-size:13px;font-weight:700}
+.tbl-head span{font-size:11px;color:#A08070}
+.tbl-count{font-size:12px;color:#A08070;margin-left:auto}
+.tbl-scroll{overflow:auto;max-height:calc(100vh - 190px)}
+table.dt{width:100%;border-collapse:collapse;font-size:12px}
+table.dt th{position:sticky;top:0;z-index:2;background:#F5F0E8;padding:7px 9px;text-align:left;font-weight:600;color:#7A5C4E;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #E8E0D4;cursor:pointer;white-space:nowrap;user-select:none}
+table.dt th:hover{background:#EDE8DC;color:#40180B}
+table.dt th.sa::after{content:' ↑'}table.dt th.sd::after{content:' ↓'}
+table.dt td{padding:6px 9px;border-bottom:1px solid #F5F0E8;white-space:nowrap}
+table.dt tbody tr:hover td{background:#FBF3E0}
+table.dt.click tbody tr{cursor:pointer}
+.more-row{padding:10px;text-align:center;border-top:1px solid #E8E0D4;background:#FAF7F2;font-size:12px;color:#7A5C4E}
+.more-row button{margin-left:8px;display:inline-flex}
+.fbar{padding:9px 14px;background:#FAF7F2;border-bottom:1px solid #E8E0D4;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fbar input,.fbar select{padding:5px 9px;border:1px solid #D5C9BC;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#40180B;height:29px}
+.fbar input:focus,.fbar select:focus{outline:none;border-color:#FFD100;box-shadow:0 0 0 2px rgba(255,209,0,.18)}
+.fbar input{min-width:190px}
+.rec{display:inline-block;white-space:nowrap;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.rk{background:#dcfce7;color:#166534}.rw{background:#fef9c3;color:#92400e}.rs{background:#fee2e2;color:#b91c1c}
+.rb{background:#e0e7ff;color:#3730a3}.rn{background:#F5F0E8;color:#7A5C4E}.rx{background:#b91c1c;color:#fff}
+.aa{background:#dbeafe;color:#1e40af}.ab{background:#e0e7ff;color:#3730a3}.ac{background:#F5F0E8;color:#7A5C4E}
+.xx{background:#d1fae5;color:#065f46}.xy{background:#fef9c3;color:#92400e}.xz{background:#fee2e2;color:#991b1b}
+.aa,.ab,.ac,.xx,.xy,.xz{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700}
+.tr{text-align:right}.tc{text-align:center}.num{font-variant-numeric:tabular-nums}.muted{color:#A08070}.b{font-weight:600}
+/* K/W/S mix bar: segments separated by a 2px surface gap; counts sit beside it so colour is never the only cue */
+.mix{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}
+.mixbar{display:flex;gap:2px;width:90px;height:8px}
+.mixbar i{display:block;height:100%;border-radius:2px;min-width:2px}
+.mk{background:#16a34a}.mw{background:#eab308}.ms{background:#dc2626}
+.mixn{font-size:10px;color:#7A5C4E;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#7A5C4E;align-items:center}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+/* Ranked bar lists */
+.bars{display:grid;grid-template-columns:minmax(90px,170px) 1fr auto;gap:5px 10px;align-items:center;font-size:12px}
+.bars .bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.bars .bl:hover{text-decoration:underline}
+.bars .bt{height:12px;background:#F5F0E8;border-radius:0 4px 4px 0}
+.bars .bf{height:100%;border-radius:0 4px 4px 0;min-width:2px}
+.bars .bv{font-variant-numeric:tabular-nums;color:#7A5C4E;font-size:11px;text-align:right}
+/* Heatmap / matrix */
+table.hm{border-collapse:separate;border-spacing:2px;font-size:11px}
+table.hm th{position:sticky;top:0;z-index:2;background:#fff;padding:4px 3px;font-size:10px;font-weight:600;color:#7A5C4E;white-space:nowrap}
+table.hm th.rowh,table.hm td.rowh{position:sticky;left:0;z-index:1;background:#fff;text-align:left;padding:3px 10px 3px 6px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:12px}
+table.hm th.rowh{z-index:3}
+table.hm td.rowh{cursor:pointer}table.hm td.rowh:hover{text-decoration:underline}
+table.hm td.c{min-width:44px;height:24px;text-align:center;border-radius:3px;font-variant-numeric:tabular-nums;font-weight:600;cursor:pointer;padding:0 4px}
+table.hm td.c:hover{outline:2px solid #40180B;outline-offset:-1px}
+table.hm td.e{background:#FAF7F2;cursor:default}table.hm td.e:hover{outline:none}
+table.hm td.side{padding:0 8px;text-align:right;font-variant-numeric:tabular-nums;color:#7A5C4E;white-space:nowrap}
+.hk{background:#dcfce7;color:#166534}.hw{background:#fef9c3;color:#92400e}.hs{background:#fee2e2;color:#b91c1c}
+.hi{background:#F0EBE2;color:#A08070;font-weight:500!important}
+.empty{padding:60px;text-align:center;color:#A08070;font-size:13px;line-height:1.6}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid #E8E0D4;border-top-color:#FFD100;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modal-bg{position:fixed;inset:0;background:rgba(64,24,11,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-bg.hidden{display:none}
+.drill{background:#fff;border-radius:12px;width:1180px;max-width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(64,24,11,.25)}
+.drill-h{padding:16px 20px;border-bottom:1px solid #E8E0D4;display:flex;align-items:flex-start;gap:12px}
+.drill-h h2{font-size:17px;font-weight:700;line-height:1.3}
+.drill-h .sub{font-size:12px;color:#7A5C4E;margin-top:4px}
+.drill-b{padding:18px 20px;overflow-y:auto}
+.drill-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px;margin-bottom:18px}
+.ds{background:#FAF7F2;border:1px solid #E8E0D4;border-radius:8px;padding:10px 12px}
+.ds-l{font-size:10px;font-weight:600;color:#7A5C4E;text-transform:uppercase;letter-spacing:.05em}
+.ds-v{font-size:17px;font-weight:700;margin-top:3px;line-height:1}
+.ds-s{font-size:10px;color:#A08070;margin-top:3px}
+.drill-sec{font-size:11px;font-weight:700;color:#7A5C4E;text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px}
+.drill-sec small{font-weight:400;text-transform:none;letter-spacing:0;color:#A08070;margin-left:6px}
+.box{border:1px solid #E8E0D4;border-radius:8px;overflow:auto;max-height:340px}
+.note{background:#FAF7F2;border:1px solid #E8E0D4;border-left:3px solid #FFD100;border-radius:6px;padding:10px 14px;font-size:12px;color:#7A5C4E;line-height:1.6;margin-bottom:16px}
+.note strong{color:#40180B}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#F5F0E8}
+::-webkit-scrollbar-thumb{background:#D5C9BC;border-radius:3px}
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <div id="sidebar-header">
+    <svg id="sidebar-logo" viewBox="0 0 442 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Odeko">
+      <path fill="#fff" d="M73.5 220c-34.6 0-53.4-44.7-66.2-110C-5.4 44.7-3.9 0 30.7 0c33.9 0 53.4 44.7 66.2 110C109.5 175.3 107.4 220 73.5 220zm-36.3-186.5c-6.8 0-3.3 26.4 6.4 76.5 9.7 50.1 16.6 76.5 23.4 76.5s3.3-26.4-6.4-76.5c-9.7-50.1-16.6-76.5-23.4-76.5z"/>
+      <path fill="#fff" d="M162.2 218h-38.3L81.9 2h38.3c28.1 0 56.6 31.1 71.5 108C206.7 186.8 190.3 218 162.2 218zm-38.1-185.2h-2.7l30.1 154.3h2.7c8.1 0 12.1-21.7 1.2-77.2-11.7-55.5-23.1-77.1-31.3-77.1z"/>
+      <path fill="#fff" d="M218.8 218 176.8 2h62.7l6 30.8h-28.2l11.9 61.3h22.4l6 30.8h-22.4l12.1 62.3h28.1l6 30.8H218.8z"/>
+      <path fill="#fff" d="M411.5 220c-34.6 0-53.4-44.7-66.2-110C332.6 44.7 334.1 0 368.7 0c33.9 0 53.4 44.7 66.2 110C447.6 175.3 445.4 220 411.5 220zm-36.3-186.5c-6.8 0-3.3 26.4 6.4 76.5 9.7 50.1 16.6 76.5 23.4 76.5 6.8 0 3.3-26.4-6.4-76.5-9.7-50.1-16.6-76.5-23.4-76.5z"/>
+      <polygon fill="#fff" points="374.4,218 331.1,108.7 332.4,2 299.2,2 298.5,98.4 279.7,2 246.2,2 288.3,218 321.8,218 303.6,124.4 340.2,218"/>
+    </svg>
+    <p>Inventory Health · Network</p>
+  </div>
+  <div id="nav-items">
+    <div class="nav-item active" data-view="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Network Overview</div>
+    <div class="nav-item" data-view="vendors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Vendors</div>
+    <div class="nav-item" data-view="matrix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>Vendor × Warehouse</div>
+    <div class="nav-item" data-view="items"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Items</div>
+    <div class="nav-item" data-view="score"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Score Engine</div>
+  </div>
+  <div id="sidebar-footer">
+    <a class="nav-sm" href="inventory-dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Single-warehouse view</a>
+  </div>
+</nav>
+
+<div id="main">
+  <div id="topbar">
+    <h2 id="page-title">Network Overview</h2>
+    <span id="ts"></span>
+    <button class="btn btn-outline" id="btn-refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
+    <button class="btn btn-primary" id="btn-export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Excel</button>
+  </div>
+
+  <div id="content">
+    <div class="empty" id="loading"><span class="spinner"></span>Loading and scoring every warehouse…</div>
+
+    <!-- OVERVIEW -->
+    <div class="view active" id="view-overview"><div id="ov-body"></div></div>
+
+    <!-- VENDORS -->
+    <div class="view" id="view-vendors">
+      <div class="card">
+        <div class="fbar">
+          <input type="text" id="v-q" placeholder="Search vendor…">
+          <select id="v-cat"><option value="">All Categories</option></select>
+          <select id="v-sig"><option value="">All Network Signals</option></select>
+          <select id="v-wh"><option value="">Any footprint</option><option value="2">2+ warehouses</option><option value="5">5+ warehouses</option><option value="10">10+ warehouses</option><option value="1">Single warehouse only</option></select>
+          <button class="btn btn-ghost" data-clear="v">Clear</button>
+          <span class="tbl-count" id="v-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt click" id="v-tbl"></table></div>
+      </div>
+    </div>
+
+    <!-- MATRIX -->
+    <div class="view" id="view-matrix">
+      <div class="card">
+        <div class="fbar">
+          <input type="text" id="m-q" placeholder="Search vendor…">
+          <select id="m-metric">
+            <option value="score">Avg Score</option>
+            <option value="sunset">% Sunset SKUs</option>
+            <option value="rec">Brand Recommendation</option>
+            <option value="rev">12-Mo Revenue</option>
+            <option value="cost">On-Hand Cost</option>
+            <option value="risk">Sunset On-Hand $</option>
+            <option value="dio">Avg DIO</option>
+          </select>
+          <select id="m-cat"><option value="">All Categories</option></select>
+          <select id="m-top"><option value="40">Top 40 by revenue</option><option value="100">Top 100</option><option value="250">Top 250</option></select>
+          <button class="btn btn-ghost" data-clear="m">Clear</button>
+          <span class="tbl-count" id="m-count"></span>
+        </div>
+        <div class="card-pad" style="border-bottom:1px solid #E8E0D4"><div class="legend" id="m-legend"></div></div>
+        <div class="tbl-scroll" style="padding:8px 12px 12px"><table class="hm" id="m-tbl"></table></div>
+      </div>
+    </div>
+
+    <!-- ITEMS -->
+    <div class="view" id="view-items">
+      <div class="card">
+        <div class="fbar">
+          <input type="text" id="i-q" placeholder="Search item, vendor or ID…">
+          <select id="i-cat"><option value="">All Categories</option></select>
+          <select id="i-read"><option value="">All Network Reads</option><option>SUNSET — ALL</option><option>SUNSET — MOST</option><option>SPLIT</option><option>WATCH</option><option>KEEP</option></select>
+          <select id="i-wh"><option value="">Any footprint</option><option value="2">2+ warehouses</option><option value="5">5+ warehouses</option><option value="10">10+ warehouses</option></select>
+          <button class="btn btn-ghost" data-clear="i">Clear</button>
+          <span class="tbl-count" id="i-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt click" id="i-tbl"></table></div>
+      </div>
+    </div>
+
+    <!-- SCORE ENGINE -->
+    <div class="view" id="view-score">
+      <div class="card">
+        <div class="fbar">
+          <input type="text" id="s-q" placeholder="Search item, vendor or ID…">
+          <select id="s-whf"><option value="">All Warehouses</option></select>
+          <select id="s-rec"><option value="">All Recommendations</option><option>KEEP</option><option>WATCH</option><option>SUNSET</option></select>
+          <select id="s-abc"><option value="">All ABC</option><option>A</option><option>B</option><option>C</option></select>
+          <select id="s-cat"><option value="">All Categories</option></select>
+          <button class="btn btn-ghost" data-clear="s">Clear</button>
+          <span class="tbl-count" id="s-count"></span>
+        </div>
+        <div class="tbl-scroll"><table class="dt click" id="s-tbl"></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg hidden" id="drill-modal">
+  <div class="drill">
+    <div class="drill-h">
+      <div style="flex:1"><h2 id="drill-title">—</h2><div class="sub" id="drill-sub"></div></div>
+      <button class="btn btn-ghost" id="drill-close" style="padding:4px 8px;font-size:16px">✕</button>
+    </div>
+    <div class="drill-b" id="drill-body"></div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────
+// Scores come from scorecard-core.js — the same joinWH()/buildBrands() the
+// single-warehouse dashboard runs, executed once per warehouse and then rolled up.
+const S={view:'overview',all:[],warehouses:[],scoredWH:[],whStats:[],vendors:[],vendorByName:{},items:[],itemById:{},sorts:{},limits:{}};
+const PAGE=400;
+const live=r=>r.status!=='Inactive'&&r.status!=='No Data';
+
+// ─── FORMAT ──────────────────────────────────────────────────
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function $m(v){if(v===null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return '$'+(v/1e6).toFixed(1)+'M';if(a>=1e3)return '$'+(v/1e3).toFixed(0)+'K';return '$'+Number(v).toFixed(0);}
+const $pct=(v,d=0)=>isNaN(v)?'—':(v*100).toFixed(d)+'%';
+const $fix=(v,d=2)=>v===null||isNaN(v)?'—':Number(v).toFixed(d);
+const $int=v=>isNaN(v)?'—':Math.round(Number(v)).toLocaleString();
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+const recOf=t=>t<40?'KEEP':t<=54?'WATCH':'SUNSET';            // same cut-offs as rec() in the core
+const recCls={KEEP:'rk',WATCH:'rw',SUNSET:'rs'};
+function recBadge(v,status){if(status==='New To Market')return '<span class="rec rw">NEW</span>';if(!v)return '<span class="muted">—</span>';return `<span class="rec ${recCls[v]}">${v}</span>`;}
+const BRAND_REC_CLS={'KEEP — Strategic':'rk','MONITOR':'rn','MOQ REVIEW':'rb','TRIM TAIL':'rw','EXIT BRAND':'rs'};
+const BRAND_REC_SHORT={'KEEP — Strategic':'KEEP','MONITOR':'MON','MOQ REVIEW':'MOQ','TRIM TAIL':'TRIM','EXIT BRAND':'EXIT'};
+const brandRecBadge=v=>v?`<span class="rec ${BRAND_REC_CLS[v]||'rn'}">${v}</span>`:'<span class="muted">—</span>';
+const SIG_CLS={'EXIT — NETWORK':'rx','REGIONAL EXIT':'rs','MOQ REVIEW':'rb','TRIM TAIL':'rw','KEEP — Strategic':'rk','MONITOR':'rn'};
+const SIG_ORDER=['EXIT — NETWORK','REGIONAL EXIT','MOQ REVIEW','TRIM TAIL','KEEP — Strategic','MONITOR'];
+const SIG_TIP='Roll-up of the per-warehouse Brand Evaluation recommendation (same rules as the single-warehouse view), most severe wins: EXIT — NETWORK = EXIT BRAND in every warehouse that carries the vendor · REGIONAL EXIT = EXIT BRAND in some warehouses · MOQ REVIEW / TRIM TAIL = flagged in at least one warehouse · KEEP — Strategic = strategic somewhere and no flags · MONITOR = everything else';
+const sigBadge=v=>`<span class="rec ${SIG_CLS[v]||'rn'}">${v}</span>`;
+const READ_CLS={'SUNSET — ALL':'rx','SUNSET — MOST':'rs','SPLIT':'rb','WATCH':'rw','KEEP':'rk'};
+const READ_TIP='How the item scores across the warehouses that stock it: SUNSET — ALL = SUNSET everywhere it is scored · SUNSET — MOST = SUNSET in at least half · SPLIT = SUNSET in some, under half · WATCH = no SUNSET, at least one WATCH · KEEP = KEEP everywhere';
+const readBadge=v=>v?`<span class="rec ${READ_CLS[v]}">${v}</span>`:'<span class="muted">—</span>';
+const abcBadge=v=>v?`<span class="${{A:'aa',B:'ab',C:'ac'}[v]||'ac'}">${v}</span>`:'<span class="muted">—</span>';
+const xyzBadge=v=>v?`<span class="${{X:'xx',Y:'xy',Z:'xz'}[v]||'xz'}">${v}</span>`:'<span class="muted">—</span>';
+function mixBar(k,w,s){
+  const t=k+w+s;if(!t)return '<span class="muted">—</span>';
+  const seg=(n,c)=>n?`<i class="${c}" style="flex:${n}"></i>`:'';
+  return `<span class="mix" title="${k} KEEP · ${w} WATCH · ${s} SUNSET"><span class="mixbar">${seg(k,'mk')}${seg(w,'mw')}${seg(s,'ms')}</span><span class="mixn">${k}/${w}/${s}</span></span>`;
+}
+const scoreCell=v=>v===null||isNaN(v)?'<span class="muted">—</span>':`<span class="rec ${recCls[recOf(Math.round(v))]}">${Math.round(v)}</span>`;
+
+// ─── LOAD ────────────────────────────────────────────────────
+async function fetchAll(){
+  const keys=['oh','abc','xyz','custSku','custMkt','margin','ledger','proc','daysAct'];
+  const res=await Promise.allSettled(keys.map(k=>fetch(`data/${k}.json`).then(r=>{if(!r.ok)throw new Error(`${k}: HTTP ${r.status}`);return r.json();})));
+  const out={};
+  keys.forEach((k,i)=>{out[k]=res[i].status==='fulfilled'?res[i].value:[];if(res[i].status!=='fulfilled')console.warn('Source failed:',res[i].reason?.message||k);});
+  return out;
+}
+// Team sunset-review decisions are stored per warehouse by the single-warehouse
+// dashboard (localStorage, this browser). Apply them so recommendations match.
+function applyReview(rows,wh){
+  let m={};try{m=JSON.parse(localStorage.getItem(`sunsetReview.${wh}`)||'{}');}catch{}
+  rows.forEach(r=>{const d=m[r.id];if(!d)return;r.review=d;if(d.decision==='KEEP'&&r.recommendation==='SUNSET')r.recommendation='WATCH';});
+}
+
+function build(raw){
+  enrichABC(raw.abc);
+  const grp=groupByWH(raw), totalCust=parseTotalCust(raw.custMkt);
+  S.warehouses=Object.keys(grp).filter(w=>(grp[w].oh||[]).length).sort();
+  S.all=[];S.whStats=[];
+  const V={};                                           // vendor name → network record
+  S.warehouses.forEach(wh=>{
+    const rows=joinWH(grp[wh],totalCust[wh],wh);
+    applyReview(rows,wh);
+    rows.forEach(r=>S.all.push(r));
+    // Warehouse roll-up
+    const w={wh,total:rows.length,skus:0,scored:0,sumScore:0,keep:0,watch:0,sunset:0,rev:0,cost:0,sunsetCost:0,stranded:0,sumAvgInv:0,sumCostAmt:0,sumNetRev:0,sumVop:0,brands:new Set()};
+    // Per-(vendor, warehouse) cell: buildBrands() row + score stats
+    const cell={};
+    buildBrands(rows).forEach(b=>{cell[b.brand]={...b,wh,scored:0,sumScore:0,keep:0,watch:0,sunsetCost:0,stranded:0};});
+    rows.forEach(r=>{
+      if(r.status==='Inactive'&&r.ohCost>0){w.stranded+=r.ohCost;if(cell[r.brand])cell[r.brand].stranded+=r.ohCost;else (V[r.brand] ||= newVendor(r.brand)).strandedOnly+=r.ohCost;}
+      if(!live(r))return;
+      const c=cell[r.brand];
+      w.skus++;w.rev+=r.rev12mo;w.cost+=r.ohCost;w.brands.add(r.brand);
+      w.sumAvgInv+=r.avgInv;w.sumCostAmt+=r.costAmt;w.sumNetRev+=r.netRev;w.sumVop+=r.vop;
+      if(r.total!==null){w.scored++;w.sumScore+=r.total;c.scored++;c.sumScore+=r.total;}
+      if(r.recommendation==='KEEP'){w.keep++;c.keep++;}
+      else if(r.recommendation==='WATCH'){w.watch++;c.watch++;}
+      else if(r.recommendation==='SUNSET'){w.sunset++;w.sunsetCost+=r.ohCost;c.sunsetCost+=r.ohCost;}
+    });
+    w.vendors=w.brands.size;
+    w.avgScore=w.scored?w.sumScore/w.scored:null;
+    w.pctSunset=w.scored?w.sunset/w.scored:0;
+    // Aggregate ratios, same construction as the Category Performance table
+    w.dio=w.sumAvgInv>0?(w.sumCostAmt>0?w.sumAvgInv*182/w.sumCostAmt:w.sumVop>0?w.sumAvgInv*30/w.sumVop:0):0;
+    w.gmroi=w.sumAvgInv>0?(w.sumNetRev-w.sumCostAmt)/w.sumAvgInv:0;
+    S.whStats.push(w);
+    Object.values(cell).forEach(c=>{
+      c.avgScore=c.scored?c.sumScore/c.scored:null;
+      (V[c.brand] ||= newVendor(c.brand)).cells[wh]=c;
+    });
+  });
+  S.scoredWH=S.whStats.filter(w=>w.skus>0).map(w=>w.wh);
+
+  // Vendor network roll-up
+  const itemsOf={};
+  S.all.forEach(r=>{if(live(r))(itemsOf[r.brand] ||= new Set()).add(r.id);});
+  S.vendors=Object.values(V).filter(v=>Object.keys(v.cells).length).map(v=>{
+    const cs=Object.values(v.cells);
+    const sum=k=>cs.reduce((s,c)=>s+(c[k]||0),0);
+    const cats={};cs.forEach(c=>Object.entries(c.catCounts).forEach(([k,n])=>{cats[k]=(cats[k]||0)+n;}));
+    const catList=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+    const recs={};cs.forEach(c=>{recs[c.recommendation]=(recs[c.recommendation]||0)+1;});
+    const nWH=cs.length, exits=recs['EXIT BRAND']||0;
+    const signal=exits===nWH?'EXIT — NETWORK':exits?'REGIONAL EXIT':recs['MOQ REVIEW']?'MOQ REVIEW':recs['TRIM TAIL']?'TRIM TAIL':recs['KEEP — Strategic']?'KEEP — Strategic':'MONITOR';
+    const rev=sum('rev'), top=cs.slice().sort((a,b)=>b.rev-a.rev)[0];
+    const scored=sum('scored'), sunsetSkus=sum('sunsetSkus'), sNR=sum('sumNetRev'), sCA=sum('sumCostAmt');
+    return {brand:v.brand,cells:v.cells,nWH,whList:cs.map(c=>c.wh).sort(),cats:new Set(Object.keys(cats)),
+      category:catList.length===0?'—':catList.length===1?catList[0][0]:'Multiple',primaryCat:catList[0]?.[0]||'—',
+      skus:sum('skus'),items:itemsOf[v.brand]?.size||0,rev,cost:sum('cost'),
+      aClass:sum('aClass'),bClass:sum('bClass'),cClass:sum('cClass'),xClass:sum('xClass'),zClass:sum('zClass'),
+      avgDIO:avg(cs.flatMap(c=>c.dioArr)),avgGMROI:avg(cs.flatMap(c=>c.gmroiArr)),
+      blendedMargin:sNR>0?(sNR-sCA)/sNR:0,
+      scored,avgScore:scored?sum('sumScore')/scored:null,keep:sum('keep'),watch:sum('watch'),sunsetSkus,
+      pctSunset:scored?sunsetSkus/scored:0,sunsetCost:sum('sunsetCost'),sunsetRev:sum('sunsetRev'),
+      revRetPct:rev>0?(rev-sum('sunsetRev'))/rev:0,custImpacted:sum('sunsetCust'),stranded:sum('stranded')+v.strandedOnly,
+      recs,exits,signal,topWH:top?.wh||'',topShare:rev>0&&top?top.rev/rev:0};
+  }).sort((a,b)=>b.rev-a.rev);
+  S.vendorByName=Object.fromEntries(S.vendors.map(v=>[v.brand,v]));
+
+  // Item network roll-up (one row per NetSuite item across the warehouses that stock it)
+  const I={};
+  S.all.forEach(r=>{
+    const it=(I[r.id] ||= {id:r.id,itemName:r.itemName,brand:r.brand,category:r.category,rows:[],nWH:0,rev:0,cost:0,cust:0,scored:0,sumScore:0,keep:0,watch:0,sunset:0,min:null,max:null,sunsetCost:0,inactiveWH:0});
+    it.rows.push(r);
+    if(!live(r)){if(r.status==='Inactive')it.inactiveWH++;return;}
+    it.nWH++;it.rev+=r.rev12mo;it.cost+=r.ohCost;it.cust+=r.numCust;
+    if(r.total!==null){it.scored++;it.sumScore+=r.total;it.min=it.min===null?r.total:Math.min(it.min,r.total);it.max=it.max===null?r.total:Math.max(it.max,r.total);}
+    if(r.recommendation==='KEEP')it.keep++;else if(r.recommendation==='WATCH')it.watch++;else if(r.recommendation==='SUNSET'){it.sunset++;it.sunsetCost+=r.ohCost;}
+  });
+  S.items=Object.values(I).filter(it=>it.nWH>0).map(it=>{
+    const n=it.keep+it.watch+it.sunset;
+    it.avgScore=it.scored?it.sumScore/it.scored:null;
+    it.read=!n?'':it.sunset===n?'SUNSET — ALL':it.sunset*2>=n?'SUNSET — MOST':it.sunset?'SPLIT':it.watch?'WATCH':'KEEP';
+    return it;
+  }).sort((a,b)=>b.rev-a.rev);
+  S.itemById=I;
+}
+function newVendor(brand){return {brand,cells:{},strandedOnly:0};}
+
+// ─── GENERIC SORTABLE TABLE ──────────────────────────────────
+// cols: {label, tip, val(r), html(r), cls}. Numeric columns sort descending first.
+function table(id,cols,rows,onRow,countLabel){
+  const st=(S.sorts[id] ||= {col:null,dir:'desc'});
+  if(st.col){
+    const c=cols.find(x=>x.label===st.col);
+    if(c){const d=st.dir==='asc'?1:-1;
+      rows=[...rows].sort((a,b)=>{let x=c.val(a),y=c.val(b);
+        const xn=x===null||x===undefined||x==='',yn=y===null||y===undefined||y==='';
+        if(xn||yn)return xn===yn?0:xn?1:-1;                 // blanks always last
+        if(typeof x==='string')return d*x.localeCompare(y);
+        return d*(x-y);});}
+  }
+  const lim=S.limits[id]||PAGE, shown=rows.slice(0,lim);
+  const el=document.getElementById(id+'-tbl');
+  el.innerHTML='<thead><tr>'+cols.map(c=>`<th data-col="${esc(c.label)}" class="${c.cls||''} ${st.col===c.label?'s'+st.dir[0]:''}"${c.tip?` title="${esc(c.tip)}"`:''}>${c.label}</th>`).join('')+'</tr></thead><tbody>'+
+    shown.map((r,i)=>`<tr data-i="${i}">`+cols.map(c=>`<td class="${c.cls||''}">${c.html(r)}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  el.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const c=cols.find(x=>x.label===th.dataset.col);
+    if(st.col===c.label)st.dir=st.dir==='asc'?'desc':'asc';
+    else{st.col=c.label;st.dir=(c.cls||'').includes('tr')?'desc':'asc';}
+    render();
+  });
+  if(onRow)el.querySelector('tbody').onclick=e=>{const tr=e.target.closest('tr');if(tr)onRow(shown[+tr.dataset.i]);};
+  const wrap=el.parentElement;wrap.querySelector('.more-row')?.remove();
+  if(rows.length>lim){
+    const d=document.createElement('div');d.className='more-row';
+    d.innerHTML=`Showing ${lim.toLocaleString()} of ${rows.length.toLocaleString()} — narrow with the filters, or <button class="btn btn-outline">Show ${Math.min(PAGE,rows.length-lim)} more</button>`;
+    d.querySelector('button').onclick=()=>{S.limits[id]=lim+PAGE;render();};
+    wrap.appendChild(d);
+  }
+  const ce=document.getElementById(id+'-count');if(ce)ce.textContent=`${rows.length.toLocaleString()} ${countLabel}`;
+}
+const val=id=>document.getElementById(id)?.value||'';
+
+// ─── OVERVIEW ────────────────────────────────────────────────
+const WHT_COLS=[
+  {label:'Warehouse',tip:'Click a row to open that warehouse in the single-warehouse scorecard',val:w=>w.wh,html:w=>`<span class="b">${esc(w.wh)}</span>`},
+  {label:'Vendors',cls:'tr num',tip:'Catalog brands with at least one Active SKU',val:w=>w.vendors,html:w=>w.skus?$int(w.vendors):'<span class="muted">—</span>'},
+  {label:'Active SKUs',cls:'tr num',tip:'Active + New To Market SKUs (Inactive and No Data excluded)',val:w=>w.skus,html:w=>w.skus?$int(w.skus):`<span class="muted" title="${w.total} on-hand rows but no catalog / sales sources for this warehouse, so nothing is scored">not scored</span>`},
+  {label:'12-Mo Rev',cls:'tr num',tip:'Invoiced revenue, trailing 12 months, active items',val:w=>w.rev,html:w=>w.skus?$m(w.rev):'—'},
+  {label:'OH Cost',cls:'tr num',tip:'On-hand inventory at cost, active items',val:w=>w.cost,html:w=>w.skus?$m(w.cost):'—'},
+  {label:'DIO',cls:'tr num',tip:'Warehouse Days Inventory Outstanding = total avg inventory × 182 ÷ total 6-month COGS (aggregated, not an average of item DIOs)',val:w=>w.dio,html:w=>w.dio>0?$fix(w.dio,0):'—'},
+  {label:'GMROI',cls:'tr num',tip:'(total net revenue − total COGS) ÷ total avg inventory',val:w=>w.gmroi,html:w=>w.gmroi?$fix(w.gmroi):'—'},
+  {label:'Avg Score',cls:'tr',tip:'Mean item score across scored SKUs. Higher = worse. KEEP <40 · WATCH 40–54 · SUNSET ≥55',val:w=>w.avgScore,html:w=>scoreCell(w.avgScore)},
+  {label:'Keep / Watch / Sunset',tip:'Scored SKUs by recommendation',val:w=>w.pctSunset,html:w=>mixBar(w.keep,w.watch,w.sunset)},
+  {label:'% Sunset',cls:'tr num',tip:'Share of scored SKUs recommended SUNSET',val:w=>w.skus?w.pctSunset:null,html:w=>w.scored?$pct(w.pctSunset):'—'},
+  {label:'Sunset OH $',cls:'tr num',tip:'On-hand cost sitting in SUNSET-scored SKUs',val:w=>w.sunsetCost,html:w=>w.sunsetCost?$m(w.sunsetCost):'—'},
+  {label:'Stranded $',cls:'tr num',tip:'On-hand cost in Inactive (removed from catalog) items',val:w=>w.stranded,html:w=>w.stranded?$m(w.stranded):'—'},
+];
+function barList(rows,valFn,fmt,color){
+  const max=Math.max(...rows.map(valFn),1);
+  return '<div class="bars">'+rows.map(v=>`<div class="bl" data-vendor="${esc(v.brand)}" title="${esc(v.brand)} — ${v.nWH} warehouse${v.nWH>1?'s':''}, ${v.skus} SKU-locations">${esc(v.brand)}</div><div class="bt"><div class="bf" style="width:${(valFn(v)/max*100).toFixed(1)}%;background:${color}"></div></div><div class="bv">${fmt(v)}</div>`).join('')+'</div>';
+}
+function renderOverview(){
+  const W=S.whStats, sum=k=>W.reduce((s,w)=>s+w[k],0);
+  const scored=sum('scored'),sunset=sum('sunset'),cost=sum('cost'),sunsetCost=sum('sunsetCost');
+  const multi=S.vendors.filter(v=>v.nWH>1).length;
+  const sig={};S.vendors.forEach(v=>{(sig[v.signal] ||= {n:0,rev:0,cost:0});sig[v.signal].n++;sig[v.signal].rev+=v.rev;sig[v.signal].cost+=v.cost;});
+  const notScored=W.filter(w=>!w.skus).map(w=>w.wh);
+  const topRev=S.vendors.slice(0,12);
+  const topRisk=S.vendors.filter(v=>v.sunsetCost>0).sort((a,b)=>b.sunsetCost-a.sunsetCost).slice(0,12);
+  document.getElementById('ov-body').innerHTML=`
+    <div class="kpi-grid">
+      <div class="kpi-card" title="Warehouses with scored inventory, out of all warehouses in the on-hand source"><div class="kpi-label">Warehouses</div><div class="kpi-value">${S.scoredWH.length}</div><div class="kpi-sub">scored of ${W.length} with on-hand data</div></div>
+      <div class="kpi-card" title="Catalog brands with at least one Active SKU anywhere in the network"><div class="kpi-label">Vendors</div><div class="kpi-value">${$int(S.vendors.length)}</div><div class="kpi-sub">${$int(multi)} in 2+ warehouses</div></div>
+      <div class="kpi-card" title="Active item × warehouse combinations, and the distinct items behind them"><div class="kpi-label">Active SKU-Locations</div><div class="kpi-value">${$int(sum('skus'))}</div><div class="kpi-sub">${$int(S.items.length)} distinct items</div></div>
+      <div class="kpi-card" title="On-hand inventory at cost across active items, all warehouses"><div class="kpi-label">Inventory Value</div><div class="kpi-value">${$m(cost)}</div><div class="kpi-sub">On-hand cost</div></div>
+      <div class="kpi-card" title="Invoiced revenue across active items, trailing 12 months, all warehouses"><div class="kpi-label">12-Mo Revenue</div><div class="kpi-value">${$m(sum('rev'))}</div><div class="kpi-sub">Invoiced amount</div></div>
+      <div class="kpi-card" title="SKU-locations scoring SUNSET (≥55) and the on-hand cost they hold"><div class="kpi-label">Sunset SKU-Locations</div><div class="kpi-value">${$int(sunset)}</div><div class="kpi-sub" style="color:#b91c1c">${$pct(scored?sunset/scored:0)} of scored · ${$m(sunsetCost)} on hand</div></div>
+      <div class="kpi-card" title="On-hand cost in Inactive (removed from catalog) items across the network"><div class="kpi-label">Inactive w/ Stock</div><div class="kpi-value">${$m(sum('stranded'))}</div><div class="kpi-sub" style="color:#b91c1c">Stranded cost</div></div>
+    </div>
+    <div class="card">
+      <div class="tbl-head"><h3>Vendor network signals</h3><span title="${esc(SIG_TIP)}" style="cursor:help">Per-warehouse brand recommendations rolled up to the network — hover for the rule. Click a signal to list its vendors.</span></div>
+      <table class="dt click" id="sig-tbl"><thead><tr><th>Signal</th><th class="tr">Vendors</th><th class="tr">12-Mo Rev</th><th class="tr">OH Cost</th><th>What it means</th></tr></thead><tbody>
+      ${SIG_ORDER.filter(k=>sig[k]).map(k=>`<tr data-sig="${k}"><td>${sigBadge(k)}</td><td class="tr num">${$int(sig[k].n)}</td><td class="tr num">${$m(sig[k].rev)}</td><td class="tr num">${$m(sig[k].cost)}</td><td class="muted" style="white-space:normal">${{
+        'EXIT — NETWORK':'EXIT BRAND in every warehouse that carries the vendor',
+        'REGIONAL EXIT':'EXIT BRAND in some warehouses, healthier in others — consolidation candidates',
+        'MOQ REVIEW':'Slow-turning (avg DIO over 150) in at least one warehouse',
+        'TRIM TAIL':'A-class anchor with a quarter or more of SKUs scoring SUNSET somewhere',
+        'KEEP — Strategic':'Strategic in at least one warehouse, no flags anywhere',
+        'MONITOR':'No flags, not yet strategic anywhere'}[k]}</td></tr>`).join('')}
+      </tbody></table>
+    </div>
+    <div class="two-col">
+      <div class="card" style="margin:0"><div class="card-pad"><div class="card-title">Top vendors by 12-month revenue</div><div class="card-sub">Network total, active items. Click a vendor for its warehouse breakdown.</div>${barList(topRev,v=>v.rev,v=>$m(v.rev),'#40180B')}</div></div>
+      <div class="card" style="margin:0"><div class="card-pad"><div class="card-title">Most on-hand cost in SUNSET SKUs</div><div class="card-sub">Inventory dollars sitting in items the scorecard recommends cutting, by vendor.</div>${topRisk.length?barList(topRisk,v=>v.sunsetCost,v=>`${$m(v.sunsetCost)} · ${v.sunsetSkus} SKU-loc`,'#dc2626'):'<div class="muted" style="font-size:12px">No SUNSET inventory.</div>'}</div></div>
+    </div>
+    <div class="card">
+      <div class="tbl-head"><h3>Warehouse comparison</h3><span>Same scoring as the single-warehouse view, side by side. Click a row to open that warehouse.${notScored.length?` Not scored (on-hand only, no catalog or sales data): ${notScored.map(esc).join(', ')}.`:''}</span></div>
+      <div style="overflow:auto"><table class="dt click" id="wh-tbl"></table></div>
+    </div>`;
+  table('wh',WHT_COLS,W,w=>{location.href=`inventory-dashboard.html?wh=${encodeURIComponent(w.wh)}`;},'warehouses');
+  document.querySelectorAll('#ov-body [data-vendor]').forEach(el=>el.onclick=()=>openVendor(el.dataset.vendor));
+  document.querySelector('#sig-tbl tbody').onclick=e=>{const tr=e.target.closest('tr');if(!tr)return;document.getElementById('v-sig').value=tr.dataset.sig;go('vendors');};
+}
+
+// ─── VENDORS ─────────────────────────────────────────────────
+function recSplit(v){
+  return Object.keys(BRAND_REC_SHORT).filter(k=>v.recs[k]).map(k=>`<span class="rec ${BRAND_REC_CLS[k]}" title="${k} in ${v.recs[k]} warehouse${v.recs[k]>1?'s':''}">${v.recs[k]} ${BRAND_REC_SHORT[k]}</span>`).join(' ');
+}
+const V_COLS=[
+  {label:'Vendor',tip:'Catalog brand — the vendor field in the source data. Click a row for the warehouse and item breakdown.',val:v=>v.brand,html:v=>`<span class="b">${esc(v.brand)||'—'}</span>`},
+  {label:'Network Signal',tip:SIG_TIP,val:v=>SIG_ORDER.indexOf(v.signal),html:v=>sigBadge(v.signal)},
+  {label:'Category',tip:'Primary category network-wide, or Multiple if the vendor spans categories',val:v=>v.category,html:v=>esc(v.category)},
+  {label:'WHs',cls:'tr num',tip:'Warehouses where the vendor has at least one Active SKU',val:v=>v.nWH,html:v=>`<span title="${esc(v.whList.join(', '))}">${v.nWH}</span>`},
+  {label:'Items',cls:'tr num',tip:'Distinct active items across the network',val:v=>v.items,html:v=>$int(v.items)},
+  {label:'SKU-Locs',cls:'tr num',tip:'Active item × warehouse combinations',val:v=>v.skus,html:v=>$int(v.skus)},
+  {label:'12-Mo Rev',cls:'tr num',tip:'Invoiced revenue, trailing 12 months, all warehouses',val:v=>v.rev,html:v=>$m(v.rev)},
+  {label:'OH Cost',cls:'tr num',tip:'On-hand inventory at cost, all warehouses',val:v=>v.cost,html:v=>$m(v.cost)},
+  {label:'Top WH',tip:'Warehouse with the most revenue for this vendor, and its share of the vendor\'s network revenue',val:v=>v.topShare,html:v=>v.rev>0?`${esc(v.topWH)} <span class="muted num">${$pct(v.topShare)}</span>`:'<span class="muted">—</span>'},
+  {label:'Avg DIO',cls:'tr num',tip:'Average Days Inventory Outstanding across the vendor\'s SKU-locations with inventory (same definition as Brand Evaluation)',val:v=>v.avgDIO,html:v=>v.avgDIO?$fix(v.avgDIO,0):'—'},
+  {label:'Margin%',cls:'tr num',tip:'Blended margin = (total revenue − total COGS) ÷ total revenue, 6-month window, all warehouses',val:v=>v.blendedMargin,html:v=>v.blendedMargin?$pct(v.blendedMargin,1):'—'},
+  {label:'Avg GMROI',cls:'tr num',tip:'Average GMROI across SKU-locations with data',val:v=>v.avgGMROI,html:v=>v.avgGMROI?$fix(v.avgGMROI):'—'},
+  {label:'Avg Score',cls:'tr',tip:'Mean item score across the vendor\'s scored SKU-locations. Higher = worse.',val:v=>v.avgScore,html:v=>scoreCell(v.avgScore)},
+  {label:'Keep / Watch / Sunset',tip:'Scored SKU-locations by item recommendation',val:v=>v.pctSunset,html:v=>mixBar(v.keep,v.watch,v.sunsetSkus)},
+  {label:'% Sunset',cls:'tr num',tip:'Share of scored SKU-locations recommended SUNSET',val:v=>v.scored?v.pctSunset:null,html:v=>v.scored?$pct(v.pctSunset):'—'},
+  {label:'Sunset OH $',cls:'tr num',tip:'On-hand cost sitting in the vendor\'s SUNSET SKU-locations',val:v=>v.sunsetCost,html:v=>v.sunsetCost?$m(v.sunsetCost):'—'},
+  {label:'Rev Retention',cls:'tr num',tip:'Share of vendor revenue kept if every SUNSET SKU-location were cut',val:v=>v.rev>0?v.revRetPct:null,html:v=>v.rev>0?$pct(v.revRetPct):'—'},
+  {label:'Stranded $',cls:'tr num',tip:'On-hand cost in the vendor\'s Inactive items',val:v=>v.stranded,html:v=>v.stranded?$m(v.stranded):'—'},
+  {label:'Warehouse Recs',tip:'Count of warehouses by Brand Evaluation recommendation (same rules as the single-warehouse view)',val:v=>v.exits/v.nWH,html:v=>recSplit(v)},
+];
+function vendorRows(){
+  const q=val('v-q').toLowerCase(),cat=val('v-cat'),sig=val('v-sig'),fp=val('v-wh');
+  return S.vendors.filter(v=>(!q||v.brand.toLowerCase().includes(q))&&(!cat||v.cats.has(cat))&&(!sig||v.signal===sig)&&(!fp||(fp==='1'?v.nWH===1:v.nWH>=+fp)));
+}
+function renderVendors(){table('v',V_COLS,vendorRows(),v=>openVendor(v.brand),'vendors');}
+
+// ─── VENDOR × WAREHOUSE MATRIX ───────────────────────────────
+const seq=(v,max)=>{const a=max>0?Math.min(1,Math.sqrt(v/max)):0;return `background:rgba(64,24,11,${(0.06+a*0.84).toFixed(2)});color:${a>0.45?'#FFFFDF':'#40180B'}`;};
+const METRICS={
+  score:{get:c=>c.avgScore,fmt:v=>Math.round(v),cls:v=>'h'+recOf(Math.round(v))[0].toLowerCase(),
+    legend:'<span><i class="hk"></i>KEEP — avg score under 40</span><span><i class="hw"></i>WATCH — 40 to 54</span><span><i class="hs"></i>SUNSET — 55 and over</span><span>Cell = mean item score for the vendor in that warehouse (higher is worse)</span>'},
+  sunset:{get:c=>c.scored?c.sunsetSkus/c.scored:null,fmt:v=>$pct(v),seq:1,fixedMax:1,legend:'Share of the vendor\'s scored SKUs recommended SUNSET in that warehouse'},
+  rec:{get:c=>c.recommendation,fmt:v=>BRAND_REC_SHORT[v],cls:v=>BRAND_REC_CLS[v],
+    legend:Object.keys(BRAND_REC_SHORT).map(k=>`<span><span class="rec ${BRAND_REC_CLS[k]}">${BRAND_REC_SHORT[k]}</span> ${k}</span>`).join('')+'<span>Brand Evaluation recommendation per warehouse</span>'},
+  rev:{get:c=>c.rev,fmt:$m,seq:1,legend:'Trailing 12-month invoiced revenue'},
+  cost:{get:c=>c.cost,fmt:$m,seq:1,legend:'On-hand inventory at cost'},
+  risk:{get:c=>c.sunsetCost||null,fmt:$m,seq:1,legend:'On-hand cost in SUNSET-scored SKUs (blank = none)'},
+  dio:{get:c=>c.avgDIO||null,fmt:v=>$int(v),seq:1,fixedMax:365,legend:'Average item DIO for the vendor in that warehouse; shading tops out at 365 days'},
+};
+function renderMatrix(){
+  const q=val('m-q').toLowerCase(),cat=val('m-cat'),top=+val('m-top'),M=METRICS[val('m-metric')];
+  const all=S.vendors.filter(v=>(!q||v.brand.toLowerCase().includes(q))&&(!cat||v.cats.has(cat)));
+  const rows=all.slice(0,top), whs=S.scoredWH;
+  let max=M.fixedMax||0;
+  if(M.seq&&!M.fixedMax)rows.forEach(v=>whs.forEach(w=>{const c=v.cells[w];if(c){const x=M.get(c);if(x>max)max=x;}}));
+  document.getElementById('m-legend').innerHTML=(M.seq?`<span><i style="background:rgba(64,24,11,.08)"></i>low</span><span><i style="background:rgba(64,24,11,.9)"></i>high</span><span>${M.legend}</span>`:M.legend)+'<span class="muted">Blank = vendor not active in that warehouse. Click a cell or vendor for detail.</span>';
+  document.getElementById('m-count').textContent=`${rows.length} of ${all.length.toLocaleString()} vendors · ${whs.length} warehouses`;
+  document.getElementById('m-tbl').innerHTML='<thead><tr><th class="rowh">Vendor</th><th title="Network signal">Signal</th>'+whs.map(w=>`<th>${esc(w)}</th>`).join('')+'<th>12-Mo Rev</th><th>WHs</th></tr></thead><tbody>'+
+    rows.map(v=>`<tr data-vendor="${esc(v.brand)}"><td class="rowh" title="${esc(v.brand)}">${esc(v.brand)}</td><td>${sigBadge(v.signal)}</td>`+whs.map(w=>{
+      const c=v.cells[w];if(!c)return '<td class="c e"></td>';
+      const x=M.get(c);if(x===null||x===undefined)return `<td class="c hi" title="${esc(v.brand)} · ${w}: no value">·</td>`;
+      const tip=`${v.brand} · ${w}\n${c.skus} SKUs · ${$m(c.rev)} rev · ${$m(c.cost)} on hand\nAvg score ${c.avgScore===null?'—':Math.round(c.avgScore)} · ${c.keep} keep / ${c.watch} watch / ${c.sunsetSkus} sunset\nBrand rec: ${c.recommendation}`;
+      return `<td class="c ${M.seq?'':M.cls(x)}" ${M.seq?`style="${seq(x,max)}"`:''} title="${esc(tip)}">${M.fmt(x)}</td>`;
+    }).join('')+`<td class="side">${$m(v.rev)}</td><td class="side">${v.nWH}</td></tr>`).join('')+'</tbody>';
+  document.querySelector('#m-tbl tbody').onclick=e=>{const tr=e.target.closest('tr');if(tr&&!e.target.classList.contains('e'))openVendor(tr.dataset.vendor);};
+}
+
+// ─── ITEMS ───────────────────────────────────────────────────
+const I_COLS=[
+  {label:'Item ID',tip:'NetSuite item ID',val:r=>+r.id||r.id,html:r=>esc(r.id)},
+  {label:'Vendor',tip:'Catalog brand',val:r=>r.brand,html:r=>esc(r.brand)||'—'},
+  {label:'Item Name',tip:'Click a row for the per-warehouse score breakdown',val:r=>r.itemName,html:r=>`<span class="b">${esc(r.itemName)||'—'}</span>`},
+  {label:'Category',val:r=>r.category,html:r=>esc(r.category)||'—'},
+  {label:'WHs',cls:'tr num',tip:'Warehouses where the item is Active',val:r=>r.nWH,html:r=>r.nWH+(r.inactiveWH?` <span class="muted" title="Inactive in ${r.inactiveWH} more">+${r.inactiveWH}</span>`:'')},
+  {label:'12-Mo Rev',cls:'tr num',tip:'Invoiced revenue, trailing 12 months, all warehouses',val:r=>r.rev,html:r=>$m(r.rev)},
+  {label:'OH Cost',cls:'tr num',tip:'On-hand inventory at cost, all warehouses',val:r=>r.cost,html:r=>$m(r.cost)},
+  {label:'Customers',cls:'tr num',tip:'Sum of 6-month ordering customers across warehouses',val:r=>r.cust,html:r=>$int(r.cust)},
+  {label:'Avg Score',cls:'tr',tip:'Mean of the item\'s per-warehouse scores. Higher = worse.',val:r=>r.avgScore,html:r=>scoreCell(r.avgScore)},
+  {label:'Range',cls:'tr num',tip:'Lowest – highest score across warehouses. A wide range means the item works in some markets and not others.',val:r=>r.max===null?null:r.max-r.min,html:r=>r.max===null?'—':r.min===r.max?r.min:`${r.min}–${r.max}`},
+  {label:'Keep / Watch / Sunset',tip:'Warehouses by item recommendation',val:r=>r.sunset,html:r=>mixBar(r.keep,r.watch,r.sunset)},
+  {label:'Sunset OH $',cls:'tr num',tip:'On-hand cost in the warehouses where the item scores SUNSET',val:r=>r.sunsetCost,html:r=>r.sunsetCost?$m(r.sunsetCost):'—'},
+  {label:'Network Read',tip:READ_TIP,val:r=>r.read,html:r=>readBadge(r.read)},
+];
+function itemRows(){
+  const q=val('i-q').toLowerCase(),cat=val('i-cat'),rd=val('i-read'),fp=+val('i-wh');
+  return S.items.filter(r=>(!q||(r.brand+' '+r.itemName+' '+r.id).toLowerCase().includes(q))&&(!cat||r.category===cat)&&(!rd||r.read===rd)&&(!fp||r.nWH>=fp));
+}
+function renderItems(){table('i',I_COLS,itemRows(),r=>openItem(r.id),'items');}
+
+// ─── SCORE ENGINE (all warehouses) ───────────────────────────
+const sc=(r,k)=>r.total!==null?r[k]:'—';
+const S_COLS=[
+  {label:'WH',tip:'Warehouse',val:r=>r.wh,html:r=>`<span class="b">${esc(r.wh)}</span>`},
+  {label:'Item ID',val:r=>+r.id||r.id,html:r=>esc(r.id)},
+  {label:'Vendor',val:r=>r.brand,html:r=>esc(r.brand)||'—'},
+  {label:'Item Name',tip:'Click a row to compare this item across warehouses',val:r=>r.itemName,html:r=>esc(r.itemName)||'—'},
+  {label:'Category',val:r=>r.category,html:r=>esc(r.category)||'—'},
+  {label:'ABC',tip:'Revenue class within warehouse + category',val:r=>r.catABC,html:r=>abcBadge(r.catABC)},
+  {label:'XYZ',tip:'Demand variability: X steady · Y moderate · Z volatile',val:r=>r.xyzClass,html:r=>xyzBadge(r.xyzClass)},
+  {label:'DIO',cls:'tr num',tip:'Days Inventory Outstanding. 9999 = dead stock.',val:r=>r.dio,html:r=>r.dio>0?$fix(r.dio,0):'—'},
+  {label:'GMROI',cls:'tr num',val:r=>r.gmroi,html:r=>$fix(r.gmroi)},
+  {label:'Margin%',cls:'tr num',val:r=>r.marginPct,html:r=>$pct(r.marginPct,1)},
+  {label:'12-Mo Rev',cls:'tr num',val:r=>r.rev12mo,html:r=>$m(r.rev12mo)},
+  {label:'OH Cost',cls:'tr num',val:r=>r.ohCost,html:r=>$m(r.ohCost)},
+  {label:'Customers',cls:'tr num',tip:'Distinct ordering customers, trailing 6 months',val:r=>r.numCust,html:r=>$int(r.numCust)},
+  {label:'DIO Sc',cls:'tr num',tip:'0–30',val:r=>r.dioSc,html:r=>sc(r,'dioSc')},
+  {label:'ABC Sc',cls:'tr num',tip:'0–25',val:r=>r.abcSc,html:r=>sc(r,'abcSc')},
+  {label:'Velo Sc',cls:'tr num',tip:'0–20',val:r=>r.veloSc,html:r=>sc(r,'veloSc')},
+  {label:'Cust Sc',cls:'tr num',tip:'0–15',val:r=>r.custSc,html:r=>sc(r,'custSc')},
+  {label:'GMROI Sc',cls:'tr num',tip:'0–10',val:r=>r.gmroiSc,html:r=>sc(r,'gmroiSc')},
+  {label:'Score',cls:'tr num',tip:'Total penalty score 0–100, normalized to available points (* = no inventory data). Higher = worse.',val:r=>r.total,html:r=>r.total===null?'—':`<span class="b">${r.total}${r.scoredMax<100?'*':''}</span>`},
+  {label:'Rec',tip:'KEEP <40 · WATCH 40–54 · SUNSET ≥55. † = team sunset-review decision applied (from this browser).',val:r=>r.recommendation,html:r=>recBadge(r.recommendation,r.status)+(r.review?' †':'')},
+];
+function scoreRows(){
+  const q=val('s-q').toLowerCase(),wh=val('s-whf'),rc=val('s-rec'),abc=val('s-abc'),cat=val('s-cat');
+  return S.all.filter(r=>live(r)&&(!wh||r.wh===wh)&&(!rc||r.recommendation===rc)&&(!abc||r.catABC===abc)&&(!cat||r.category===cat)&&(!q||(r.brand+' '+r.itemName+' '+r.id).toLowerCase().includes(q)));
+}
+function renderScore(){table('s',S_COLS,scoreRows(),r=>openItem(r.id),'SKU-locations');}
+
+// ─── DRILL-DOWNS ─────────────────────────────────────────────
+function showDrill(title,sub,body){
+  document.getElementById('drill-title').textContent=title;
+  document.getElementById('drill-sub').innerHTML=sub;
+  const b=document.getElementById('drill-body');b.innerHTML=body;b.scrollTop=0;
+  document.getElementById('drill-modal').classList.remove('hidden');
+}
+function closeDrill(){document.getElementById('drill-modal').classList.add('hidden');}
+document.getElementById('drill-close').onclick=closeDrill;
+document.getElementById('drill-modal').addEventListener('click',e=>{if(e.target.id==='drill-modal')closeDrill();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrill();});
+const stat=(l,v,s,tip)=>`<div class="ds"${tip?` title="${esc(tip)}"`:''}><div class="ds-l">${l}</div><div class="ds-v">${v}</div><div class="ds-s">${s||''}</div></div>`;
+// One item's cell in a warehouse column
+function itemCell(r){
+  if(!r)return '<td class="c e"></td>';
+  const base=`${r.wh} · ${r.itemName}`;
+  if(r.status==='Inactive')return `<td class="c hi" title="${esc(base)}\nInactive${r.ohCost>0?' — '+$m(r.ohCost)+' stranded on hand':''}">off</td>`;
+  if(r.status==='No Data')return `<td class="c hi" title="${esc(base)}\nNo Data">n/d</td>`;
+  if(r.total===null)return `<td class="c hw" title="${esc(base)}\nNew To Market — not scored">new</td>`;
+  const tip=`${base}\nScore ${r.total}${r.scoredMax<100?'*':''} → ${r.recommendation}${r.review?' (team review applied)':''}\nDIO ${r.dioSc} · ABC ${r.abcSc} · Velocity ${r.veloSc} · Customers ${r.custSc} · GMROI ${r.gmroiSc}\n${$m(r.rev12mo)} rev · ${$m(r.ohCost)} on hand · ${$int(r.numCust)} customers · DIO ${r.dio>0?Math.round(r.dio):'—'}`;
+  return `<td class="c h${r.recommendation[0].toLowerCase()}" title="${esc(tip)}">${r.total}</td>`;
+}
+const CELL_LEGEND='<div class="legend" style="margin-bottom:8px"><span><i class="hk"></i>KEEP &lt;40</span><span><i class="hw"></i>WATCH 40–54</span><span><i class="hs"></i>SUNSET ≥55</span><span><i class="hi"></i>off = Inactive · n/d = No Data</span><span class="muted">Number = item score in that warehouse; hover for the five components.</span></div>';
+
+function openVendor(name){
+  const v=S.vendorByName[name];if(!v)return;
+  const cs=v.whList.map(w=>v.cells[w]).sort((a,b)=>b.rev-a.rev);
+  const its=S.items.filter(i=>i.brand===name);           // already revenue-sorted
+  const cols=cs.map(c=>c.wh);
+  const whTbl=`<div class="box"><table class="dt click" id="vd-wh"><thead><tr>
+      <th>Warehouse</th><th class="tr">SKUs</th><th class="tr">12-Mo Rev</th><th class="tr" title="Share of this vendor's network revenue">Rev Share</th><th class="tr">OH Cost</th>
+      <th class="tr" title="A / B / C class SKU counts">A/B/C</th><th class="tr">Avg DIO</th><th class="tr">Margin%</th><th class="tr">Avg GMROI</th><th class="tr">Avg Score</th>
+      <th>Keep / Watch / Sunset</th><th class="tr">% Sunset</th><th class="tr">Sunset OH $</th><th class="tr" title="Share of the vendor's revenue in this warehouse kept if SUNSET SKUs were cut">Rev Retention</th><th class="tr" title="Customers ordering the SUNSET SKUs">Cust Impacted</th><th title="Brand Evaluation recommendation for this warehouse">Brand Rec</th></tr></thead><tbody>`+
+    cs.map(c=>`<tr data-wh="${esc(c.wh)}" title="Open ${esc(c.wh)} in the single-warehouse scorecard"><td class="b">${esc(c.wh)}</td><td class="tr num">${c.skus}</td><td class="tr num">${$m(c.rev)}</td><td class="tr num">${v.rev>0?$pct(c.rev/v.rev):'—'}</td><td class="tr num">${$m(c.cost)}</td>
+      <td class="tr num">${c.aClass}/${c.bClass}/${c.cClass}</td><td class="tr num">${c.avgDIO?$fix(c.avgDIO,0):'—'}</td><td class="tr num">${c.blendedMargin?$pct(c.blendedMargin,1):'—'}</td><td class="tr num">${c.avgGMROI?$fix(c.avgGMROI):'—'}</td><td class="tr">${scoreCell(c.avgScore)}</td>
+      <td>${mixBar(c.keep,c.watch,c.sunsetSkus)}</td><td class="tr num">${c.scored?$pct(c.sunsetSkus/c.scored):'—'}</td><td class="tr num">${c.sunsetCost?$m(c.sunsetCost):'—'}</td><td class="tr num">${c.rev>0?$pct(c.revRetPct):'—'}</td><td class="tr num">${c.custImpacted||'—'}</td><td>${brandRecBadge(c.recommendation)}</td></tr>`).join('')+'</tbody></table></div>';
+  const LIM=150;
+  const itemTbl=`<div class="box" style="max-height:420px;padding:6px"><table class="hm" id="vd-items"><thead><tr><th class="rowh">Item</th>${cols.map(w=>`<th>${esc(w)}</th>`).join('')}<th>12-Mo Rev</th><th>OH Cost</th><th>Read</th></tr></thead><tbody>`+
+    its.slice(0,LIM).map(i=>{const by=Object.fromEntries(i.rows.map(r=>[r.wh,r]));
+      return `<tr data-item="${esc(i.id)}"><td class="rowh" title="${esc(i.itemName)} · Item ${esc(i.id)}">${esc(i.itemName)}</td>${cols.map(w=>itemCell(by[w])).join('')}<td class="side">${$m(i.rev)}</td><td class="side">${$m(i.cost)}</td><td>${readBadge(i.read)}</td></tr>`;}).join('')+'</tbody></table></div>'+
+    (its.length>LIM?`<div class="ds-s" style="margin-top:6px">Showing the top ${LIM} of ${its.length} items by revenue — the Items tab and the Excel export have the full list.</div>`:'');
+  showDrill(name,
+    `${esc(v.category==='Multiple'?`${v.primaryCat} + ${v.cats.size-1} more categor${v.cats.size>2?'ies':'y'}`:v.category)} · ${v.nWH} warehouse${v.nWH>1?'s':''} · ${v.items} items &nbsp; ${sigBadge(v.signal)} ${recSplit(v)}`,
+    `<div class="drill-stats">
+      ${stat('12-Mo Revenue',$m(v.rev),v.rev>0?`${$pct(v.topShare)} from ${esc(v.topWH)}`:'')}
+      ${stat('On-Hand Cost',$m(v.cost),`${$int(v.skus)} SKU-locations`)}
+      ${stat('Avg Score',v.avgScore===null?'—':Math.round(v.avgScore),`${v.keep} keep · ${v.watch} watch · ${v.sunsetSkus} sunset`,'Mean item score across scored SKU-locations — higher is worse')}
+      ${stat('Sunset OH $',$m(v.sunsetCost),`${$pct(v.pctSunset)} of scored SKU-locations`)}
+      ${stat('Rev Retention',v.rev>0?$pct(v.revRetPct):'—','if all SUNSET SKUs were cut')}
+      ${stat('Margin',v.blendedMargin?$pct(v.blendedMargin,1):'—','blended, 6-month')}
+      ${stat('Avg DIO',v.avgDIO?$fix(v.avgDIO,0):'—',`GMROI ${v.avgGMROI?$fix(v.avgGMROI):'—'}`)}
+      ${stat('Stranded $',$m(v.stranded),'inactive items on hand')}
+    </div>
+    <div class="drill-sec">By warehouse<small>Brand Evaluation row per warehouse — identical to the single-warehouse view. Click a row to open it there.</small></div>${whTbl}
+    <div class="drill-sec">Items across warehouses<small>Click an item for its full per-warehouse score breakdown.</small></div>${CELL_LEGEND}${itemTbl}`);
+  document.querySelector('#vd-wh tbody').onclick=e=>{const tr=e.target.closest('tr');if(tr)location.href=`inventory-dashboard.html?wh=${encodeURIComponent(tr.dataset.wh)}`;};
+  document.querySelector('#vd-items tbody').onclick=e=>{const tr=e.target.closest('tr');if(tr)openItem(tr.dataset.item);};
+}
+
+function openItem(id){
+  const it=S.itemById[id];if(!it)return;
+  const rows=it.rows.slice().sort((a,b)=>(live(b)-live(a))||((b.total??-1)-(a.total??-1)));
+  const scoredRows=rows.filter(r=>r.total!==null);
+  const best=scoredRows.length?scoredRows.reduce((a,b)=>b.total<a.total?b:a):null, worst=scoredRows.length?scoredRows.reduce((a,b)=>b.total>a.total?b:a):null;
+  showDrill(it.itemName||id,
+    `<a href="#" id="it-vendor" style="font-weight:600">${esc(it.brand)||'—'}</a> · ${esc(it.category)||'—'} · Item ${esc(id)} &nbsp; ${readBadge(it.read)}`,
+    `<div class="drill-stats">
+      ${stat('Warehouses',it.nWH,it.inactiveWH?`+${it.inactiveWH} inactive`:'active')}
+      ${stat('12-Mo Revenue',$m(it.rev),'all warehouses')}
+      ${stat('On-Hand Cost',$m(it.cost),it.sunsetCost?`${$m(it.sunsetCost)} in SUNSET warehouses`:'')}
+      ${stat('Avg Score',it.avgScore===null?'—':Math.round(it.avgScore),it.max===null?'':`range ${it.min}–${it.max}`)}
+      ${stat('Best / Worst',best?`${esc(best.wh)} / ${esc(worst.wh)}`:'—',best?`${best.total} vs ${worst.total}`:'','Lowest-scoring (healthiest) and highest-scoring warehouse')}
+      ${stat('Recommendations',`${it.keep}/${it.watch}/${it.sunset}`,'keep / watch / sunset')}
+    </div>
+    <div class="drill-sec">Per-warehouse scorecard<small>Same five components and thresholds as the single-warehouse Score Engine.</small></div>
+    <div class="box" style="max-height:460px"><table class="dt"><thead><tr><th>WH</th><th>Status</th><th>ABC</th><th>XYZ</th><th class="tr">DIO</th><th class="tr">GMROI</th><th class="tr">Margin%</th><th class="tr">12-Mo Rev</th><th class="tr">OH Cost</th><th class="tr">Customers</th>
+      <th class="tr" title="0–30">DIO Sc</th><th class="tr" title="0–25">ABC Sc</th><th class="tr" title="0–20">Velo Sc</th><th class="tr" title="0–15">Cust Sc</th><th class="tr" title="0–10">GMROI Sc</th><th class="tr">Score</th><th>Rec</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr${live(r)?'':' style="opacity:.55"'}><td class="b">${esc(r.wh)}</td><td>${esc(r.status)}</td><td>${abcBadge(r.catABC)}</td><td>${xyzBadge(r.xyzClass)}</td><td class="tr num">${r.dio>0?$fix(r.dio,0):'—'}</td><td class="tr num">${$fix(r.gmroi)}</td><td class="tr num">${$pct(r.marginPct,1)}</td><td class="tr num">${$m(r.rev12mo)}</td><td class="tr num">${$m(r.ohCost)}</td><td class="tr num">${$int(r.numCust)}</td>
+      <td class="tr num">${sc(r,'dioSc')}</td><td class="tr num">${sc(r,'abcSc')}</td><td class="tr num">${sc(r,'veloSc')}</td><td class="tr num">${sc(r,'custSc')}</td><td class="tr num">${sc(r,'gmroiSc')}</td><td class="tr num b">${r.total===null?'—':r.total+(r.scoredMax<100?'*':'')}</td><td>${recBadge(r.recommendation,r.status)}${r.review?' †':''}</td></tr>`).join('')+'</tbody></table></div>');
+  document.getElementById('it-vendor').onclick=e=>{e.preventDefault();openVendor(it.brand);};
+}
+
+// ─── NAV / RENDER ────────────────────────────────────────────
+const RENDER={overview:renderOverview,vendors:renderVendors,matrix:renderMatrix,items:renderItems,score:renderScore};
+function render(){if(S.all.length)RENDER[S.view]();}
+function go(view){
+  S.view=view;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${view}`));
+  document.getElementById('page-title').textContent=document.querySelector(`.nav-item[data-view="${view}"]`).textContent.trim();
+  render();
+}
+document.querySelectorAll('.nav-item').forEach(el=>el.onclick=()=>go(el.dataset.view));
+document.querySelectorAll('.fbar input,.fbar select').forEach(el=>{el.oninput=el.onchange=()=>{S.limits[el.id.split('-')[0]]=PAGE;render();};});
+document.querySelectorAll('[data-clear]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(`.fbar [id^="${b.dataset.clear}-"]`).forEach(el=>{if(el.tagName==='INPUT')el.value='';else el.selectedIndex=0;});
+  render();
+});
+function fill(id,vals){const sel=document.getElementById(id),cur=sel.value;sel.length=1;vals.forEach(v=>sel.add(new Option(v,v)));sel.value=[...sel.options].some(o=>o.value===cur)?cur:'';}
+
+async function refresh(){
+  const ld=document.getElementById('loading');ld.style.display='block';ld.innerHTML='<span class="spinner"></span>Loading and scoring every warehouse…';
+  document.querySelectorAll('.view').forEach(v=>v.style.visibility='hidden');
+  try{
+    build(await fetchAll());
+    if(!S.all.length)throw new Error('No on-hand data found in data/oh.json — run the “Fetch Inventory Data” GitHub Action.');
+    const cats=[...new Set(S.all.filter(live).map(r=>r.category).filter(Boolean))].sort();
+    ['v-cat','m-cat','i-cat','s-cat'].forEach(id=>fill(id,cats));
+    fill('s-whf',S.scoredWH);fill('v-sig',SIG_ORDER);
+    ld.style.display='none';
+    document.querySelectorAll('.view').forEach(v=>v.style.visibility='');
+    document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
+    render();
+  }catch(e){console.error(e);ld.innerHTML=`<strong>Load failed</strong><br>${esc(e.message)}`;}
+}
+document.getElementById('btn-refresh').onclick=refresh;
+
+// ─── EXCEL EXPORT ────────────────────────────────────────────
+document.getElementById('btn-export').onclick=async()=>{
+  if(!S.all.length)return;
+  const C={mocha:'FF40180B',mid:'FF7A5C4E',lt:'FFF5F0E8',white:'FFFFFFFF',border:'FFE8E0D4',kB:'FFDCFCE7',kF:'FF166534',wB:'FFFEF9C3',wF:'FF92400E',sB:'FFFEE2E2',sF:'FFB91C1C',bB:'FFE0E7FF',bF:'FF3730A3'};
+  const TONE={KEEP:'k',WATCH:'w',SUNSET:'s','KEEP — Strategic':'k','TRIM TAIL':'w','MOQ REVIEW':'b','EXIT BRAND':'s','EXIT — NETWORK':'s','REGIONAL EXIT':'s','SUNSET — ALL':'s','SUNSET — MOST':'s','SPLIT':'b'};
+  const wb=new ExcelJS.Workbook();wb.creator='Odeko Inventory Health';wb.created=new Date();
+  // cols: [header, width, value fn, numFmt, tone?]
+  function sheet(name,cols,rows,freeze){
+    const ws=wb.addWorksheet(name);
+    ws.views=[{state:'frozen',xSplit:freeze,ySplit:1}];
+    ws.addRow(cols.map(c=>c[0]));
+    const hr=ws.getRow(1);hr.height=28;
+    hr.eachCell(c=>{c.font={name:'Arial',bold:true,size:10,color:{argb:C.white}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:C.mocha}};c.alignment={horizontal:'center',vertical:'middle',wrapText:true};});
+    cols.forEach((c,i)=>{ws.getColumn(i+1).width=c[1];if(c[3])ws.getColumn(i+1).numFmt=c[3];});
+    rows.forEach(r=>{
+      const vals=cols.map(c=>{const v=c[2](r);return v===null||v===undefined||(typeof v==='number'&&isNaN(v))?'':v;});
+      const row=ws.addRow(vals);
+      row.eachCell(c=>{c.font={name:'Arial',size:10,color:{argb:C.mocha}};c.border={bottom:{style:'hair',color:{argb:C.border}}};});
+      cols.forEach((c,i)=>{if(!c[4])return;const t=TONE[vals[i]];if(!t)return;const cell=row.getCell(i+1);
+        cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:C[t+'B']}};cell.font={name:'Arial',size:10,bold:true,color:{argb:C[t+'F']}};cell.alignment={horizontal:'center'};});
+    });
+    ws.autoFilter={from:{row:1,column:1},to:{row:1,column:cols.length}};
+    return ws;
+  }
+  const $='"$"#,##0',P='0%',P1='0.0%',N='#,##0',D='#,##0.00';
+  const rd=v=>v===null?null:Math.round(v*10)/10;
+  sheet('Vendors',[
+    ['Vendor',28,v=>v.brand],['Category',18,v=>v.category],['Warehouses',11,v=>v.nWH],['Items',8,v=>v.items],['SKU-Locations',12,v=>v.skus],
+    ['12-Mo Rev ($)',15,v=>v.rev,$],['OH Cost ($)',14,v=>v.cost,$],['Top WH',9,v=>v.topWH],['Top WH Rev Share',11,v=>v.topShare,P],
+    ['A-Class',8,v=>v.aClass],['B-Class',8,v=>v.bClass],['C-Class',8,v=>v.cClass],['Avg DIO',9,v=>v.avgDIO,N],['Margin %',9,v=>v.blendedMargin,P1],['Avg GMROI',10,v=>v.avgGMROI,D],
+    ['Avg Score',9,v=>rd(v.avgScore)],['Keep',7,v=>v.keep],['Watch',7,v=>v.watch],['Sunset',7,v=>v.sunsetSkus],['% Sunset',9,v=>v.pctSunset,P],
+    ['Sunset OH ($)',13,v=>v.sunsetCost,$],['Rev Retention %',11,v=>v.revRetPct,P],['Cust Impacted',10,v=>v.custImpacted],['Stranded ($)',12,v=>v.stranded,$],
+    ...Object.keys(BRAND_REC_SHORT).map(k=>[`WHs: ${k}`,10,v=>v.recs[k]||0]),
+    ['Network Signal',18,v=>v.signal,null,1],['Warehouse List',50,v=>v.whList.join(', ')],
+  ],vendorRows(),1);
+  const cells=[];vendorRows().forEach(v=>v.whList.forEach(w=>cells.push(v.cells[w])));
+  sheet('Vendor by Warehouse',[
+    ['Vendor',28,c=>c.brand],['Warehouse',11,c=>c.wh],['Category',18,c=>c.category],['SKUs',7,c=>c.skus],['12-Mo Rev ($)',15,c=>c.rev,$],['OH Cost ($)',14,c=>c.cost,$],
+    ['A-Class',8,c=>c.aClass],['B-Class',8,c=>c.bClass],['C-Class',8,c=>c.cClass],['X-Class',8,c=>c.xClass],['Z-Class',8,c=>c.zClass],
+    ['Avg DIO',9,c=>c.avgDIO,N],['Margin %',9,c=>c.blendedMargin,P1],['Avg GMROI',10,c=>c.avgGMROI,D],['Avg Score',9,c=>rd(c.avgScore)],
+    ['Keep',7,c=>c.keep],['Watch',7,c=>c.watch],['Sunset SKUs',8,c=>c.sunsetSkus],['% Sunset',9,c=>c.pctSunset,P],['Sunset OH ($)',13,c=>c.sunsetCost,$],
+    ['Rev Retention %',11,c=>c.revRetPct,P],['Cust Impacted',10,c=>c.custImpacted],['Brand Rec',18,c=>c.recommendation,null,1],
+  ],cells,2);
+  sheet('Warehouses',[
+    ['Warehouse',12,w=>w.wh],['Vendors',9,w=>w.vendors],['Active SKUs',11,w=>w.skus],['12-Mo Rev ($)',15,w=>w.rev,$],['OH Cost ($)',14,w=>w.cost,$],
+    ['DIO',8,w=>w.dio,N],['GMROI',8,w=>w.gmroi,D],['Avg Score',9,w=>rd(w.avgScore)],['Keep',7,w=>w.keep],['Watch',7,w=>w.watch],['Sunset',7,w=>w.sunset],
+    ['% Sunset',9,w=>w.pctSunset,P],['Sunset OH ($)',13,w=>w.sunsetCost,$],['Stranded ($)',12,w=>w.stranded,$],
+  ],S.whStats,1);
+  const byWH=i=>Object.fromEntries(i.rows.map(r=>[r.wh,r]));
+  sheet('Items',[
+    ['Item ID',11,i=>i.id],['Vendor',24,i=>i.brand],['Item Name',46,i=>i.itemName],['Category',18,i=>i.category],['Warehouses',11,i=>i.nWH],
+    ['12-Mo Rev ($)',15,i=>i.rev,$],['OH Cost ($)',14,i=>i.cost,$],['Customers',10,i=>i.cust],['Avg Score',9,i=>rd(i.avgScore)],['Min',6,i=>i.min],['Max',6,i=>i.max],
+    ['Keep',7,i=>i.keep],['Watch',7,i=>i.watch],['Sunset',7,i=>i.sunset],['Sunset OH ($)',13,i=>i.sunsetCost,$],['Network Read',16,i=>i.read,null,1],
+    ...S.scoredWH.map(w=>[w,7,i=>{const r=byWH(i)[w];return !r?null:r.total!==null?r.total:r.status==='Inactive'?'off':r.status==='No Data'?'n/d':'new';}]),
+  ],itemRows(),3);
+  sheet('Score Engine',[
+    ['Warehouse',11,r=>r.wh],['Item ID',11,r=>r.id],['Vendor',24,r=>r.brand],['Item Name',46,r=>r.itemName],['Category',18,r=>r.category],['Status',14,r=>r.status],
+    ['ABC',6,r=>r.catABC],['XYZ',6,r=>r.xyzClass],['DIO',9,r=>r.dio>0?r.dio:null,N],['ITO',8,r=>r.ito||null,'#,##0.0'],['GMROI',9,r=>r.gmroi||null,D],['Margin %',9,r=>r.marginPct||null,P1],
+    ['12-Mo Rev ($)',15,r=>r.rev12mo||null,$],['OH Cost ($)',14,r=>r.ohCost||null,$],['Customers',10,r=>r.numCust||null],
+    ['DIO Sc',7,r=>r.total!==null?r.dioSc:null],['ABC Sc',7,r=>r.total!==null?r.abcSc:null],['Velo Sc',7,r=>r.total!==null?r.veloSc:null],['Cust Sc',7,r=>r.total!==null?r.custSc:null],['GMROI Sc',8,r=>r.total!==null?r.gmroiSc:null],
+    ['Score',7,r=>r.total],['Recommendation',16,r=>r.recommendation,null,1],
+  ],scoreRows(),4);
+  const buf=await wb.xlsx.writeBuffer();
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;a.download=`Inventory_Health_Network_${new Date().toISOString().slice(0,10)}.xlsx`;a.click();URL.revokeObjectURL(url);
+};
+
+// ─── INIT ────────────────────────────────────────────────────
+refresh().then(()=>{
+  const p=new URLSearchParams(location.search);
+  if(p.get('view')&&RENDER[p.get('view')])go(p.get('view'));
+  if(p.get('vendor'))openVendor(p.get('vendor'));
+});
+</script>
+</body>
+</html>
